@@ -81,8 +81,12 @@ class HomeViewModel : ViewModel() {
                 val forYouJob = async { YouTubeExtractor.search(forYouQuery) }
                 
                 val fastResults = awaitAll(trendingJob, forYouJob)
-                _trendingSongs.value = repository?.enrichTracks(fastResults[0].shuffled().take(10).ifEmpty { getDummyTracks("Trending") }) ?: emptyList()
-                _forYouSongs.value = repository?.enrichTracks(fastResults[1].shuffled().take(10).ifEmpty { getDummyTracks("For You") }) ?: emptyList()
+                val enrichedTrending = repository?.enrichTracks(fastResults[0].shuffled().take(10).ifEmpty { getDummyTracks("Trending") }) ?: emptyList()
+                val enrichedForYou = repository?.enrichTracks(fastResults[1].shuffled().take(10).ifEmpty { getDummyTracks("For You") }) ?: emptyList()
+                
+                _trendingSongs.value = enrichedTrending
+                _forYouSongs.value = enrichedForYou
+                
                 _isLoading.value = false // Hide loader early
 
                 // 2. BACKGROUND LOAD: The rest of the sections (Throttled)

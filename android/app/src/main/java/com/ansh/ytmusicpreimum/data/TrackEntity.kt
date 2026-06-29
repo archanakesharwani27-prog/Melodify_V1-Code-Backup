@@ -46,6 +46,14 @@ data class SearchHistoryEntity(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "stream_cache")
+data class StreamCacheEntity(
+    @PrimaryKey val videoId: String,
+    val streamUrl: String,
+    val expiryTime: Long,
+    val quality: String
+)
+
 data class PlaylistWithTracks(
     @Embedded val playlist: PlaylistEntity,
     @Relation(

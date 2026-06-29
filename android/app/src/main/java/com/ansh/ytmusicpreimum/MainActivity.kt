@@ -492,7 +492,7 @@ fun MainScreen(
                                 onThemeChange = onThemeChange,
                                 audioQuality = audioQuality,
                                 onQualityChange = { musicViewModel.setAudioQuality(it) },
-                                musicViewModel = musicViewModel,
+                                 musicViewModel = musicViewModel,
                                 loginViewModel = loginViewModel,
                                 navController = navController,
                                 userTier = userTier,
@@ -820,7 +820,8 @@ fun BottomNavigationBar(navController: NavController) {
 fun HomeScreen(
     onSongPlay: (TrackEntity, List<TrackEntity>) -> Unit,
     onGenreClick: (String) -> Unit = {},
-    homeViewModel: HomeViewModel = viewModel()
+    homeViewModel: HomeViewModel = viewModel(),
+    musicViewModel: MusicViewModel = viewModel()
 ) {
     val libraryViewModel: LibraryViewModel = viewModel()
     
@@ -829,6 +830,20 @@ fun HomeScreen(
     }
 
     val trending by homeViewModel.trendingSongs.collectAsState()
+    
+    // Predictive Prefetch for Home
+    LaunchedEffect(trending) {
+        if (trending.isNotEmpty()) {
+            musicViewModel.prefetchTracks(trending)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            musicViewModel.cancelPredictivePrefetch()
+        }
+    }
+
     val forYou by homeViewModel.forYouSongs.collectAsState()
     val moodMixes by homeViewModel.moodMixes.collectAsState()
     val evergreenMixes by homeViewModel.evergreenEmotionalMixes.collectAsState()
@@ -1257,6 +1272,7 @@ fun Modifier.shimmerEffect(): Modifier = composed {
 fun SearchScreen(
     onSongPlay: (TrackEntity, List<TrackEntity>) -> Unit, 
     searchViewModel: SearchViewModel = viewModel(),
+    musicViewModel: MusicViewModel = viewModel(),
     downloadStates: Map<String, DownloadState> = emptyMap(),
     onDownloadClick: (TrackEntity) -> Unit = {},
     onCancelDownload: (String) -> Unit = {},
@@ -1268,7 +1284,21 @@ fun SearchScreen(
     val searchError by searchViewModel.searchError.collectAsState()
     val recent by searchViewModel.recentSearches.collectAsState()
 
+    // Predictive Prefetch
+    LaunchedEffect(results) {
+        if (results.isNotEmpty()) {
+            musicViewModel.prefetchTracks(results)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            musicViewModel.cancelPredictivePrefetch()
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
+
         Text("Search", modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onBackground)
         SearchBar(query, onQueryChange = { query = it; searchViewModel.search(it) }, onSearch = { searchViewModel.addToHistory(query) })
         
@@ -1557,6 +1587,7 @@ fun PlaylistCard(
 fun LibraryScreen(
     onSongPlay: (TrackEntity, List<TrackEntity>) -> Unit, 
     libraryViewModel: LibraryViewModel = viewModel(),
+    musicViewModel: MusicViewModel = viewModel(),
     downloadStates: Map<String, DownloadState> = emptyMap(),
     queuedTracks: List<TrackEntity> = emptyList(),
     onDownloadClick: (TrackEntity) -> Unit = {},
@@ -1572,6 +1603,26 @@ fun LibraryScreen(
     var selectedTab by remember { mutableStateOf("Playlists") }
     val context = LocalContext.current
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
+
+    // Predictive Prefetch for Library Tabs
+    LaunchedEffect(selectedTab, likedTracks, downloadedTracks, history, localTracks) {
+        val tracksToPrefetch = when (selectedTab) {
+            "Liked" -> likedTracks
+            "Downloads" -> downloadedTracks
+            "History" -> history.map { TrackEntity(id = it.trackId, title = it.title, artist = it.artist, thumbnailUrl = it.thumbnailUrl) }
+            "Local" -> localTracks
+            else -> emptyList()
+        }
+        if (tracksToPrefetch.isNotEmpty()) {
+            musicViewModel.prefetchTracks(tracksToPrefetch)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            musicViewModel.cancelPredictivePrefetch()
+        }
+    }
 
     val permission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) android.Manifest.permission.READ_MEDIA_AUDIO else android.Manifest.permission.READ_EXTERNAL_STORAGE
     val launcher = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { isGranted -> if (isGranted) libraryViewModel.loadLocalTracks() else Toast.makeText(context, "Permission denied", Toast.LENGTH_SHORT).show() }
@@ -1834,6 +1885,7 @@ fun PlaylistDetailScreen(
     onSongPlay: (TrackEntity, List<TrackEntity>) -> Unit,
     onBack: () -> Unit,
     libraryViewModel: LibraryViewModel = viewModel(),
+    musicViewModel: MusicViewModel = viewModel(),
     downloadStates: Map<String, DownloadState> = emptyMap(),
     onDownloadClick: (TrackEntity) -> Unit = {},
     onCancelDownload: (String) -> Unit = {}
@@ -1841,6 +1893,21 @@ fun PlaylistDetailScreen(
     val playlistWithTracksFlow = remember(playlistId) { libraryViewModel.getPlaylistTracks(playlistId) }
     val playlistWithTracks by playlistWithTracksFlow.collectAsState(initial = null)
     
+    // Predictive Prefetch for Playlist
+    LaunchedEffect(playlistWithTracks) {
+        playlistWithTracks?.tracks?.let { tracks ->
+            if (tracks.isNotEmpty()) {
+                musicViewModel.prefetchTracks(tracks)
+            }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            musicViewModel.cancelPredictivePrefetch()
+        }
+    }
+
     Column(modifier = Modifier
         .fillMaxSize()
         .background(Color.Transparent)

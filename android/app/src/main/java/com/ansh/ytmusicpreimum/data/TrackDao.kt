@@ -77,4 +77,14 @@ interface TrackDao {
 
     @Query("DELETE FROM playlist_track_cross_ref")
     suspend fun clearPlaylistCrossRefs()
+
+    // Stream Cache Operations
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStreamCache(cache: StreamCacheEntity)
+
+    @Query("SELECT * FROM stream_cache WHERE videoId = :videoId AND quality = :quality LIMIT 1")
+    suspend fun getStreamCache(videoId: String, quality: String): StreamCacheEntity?
+
+    @Query("DELETE FROM stream_cache WHERE expiryTime < :currentTime")
+    suspend fun clearExpiredCache(currentTime: Long)
 }

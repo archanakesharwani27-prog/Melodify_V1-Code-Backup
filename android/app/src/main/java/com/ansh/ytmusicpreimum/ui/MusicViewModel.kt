@@ -19,6 +19,7 @@ import com.ansh.ytmusicpreimum.data.AppDatabase
 import com.ansh.ytmusicpreimum.data.TrackEntity
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -83,7 +84,30 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private var isPreparingManually = false
     private val urlCache = mutableMapOf<String, String>()
-    private var prefetchJob: kotlinx.coroutines.Job? = null
+    private var prefetchJob: Job? = null
+    private var predictivePrefetchJobs = mutableListOf<Job>()
+
+    fun prefetchTracks(tracks: List<TrackEntity>) {
+        // Cancel existing predictive prefetches
+        predictivePrefetchJobs.forEach { it.cancel() }
+        predictivePrefetchJobs.clear()
+
+        // Prefetch ONLY first 2 tracks
+        tracks.take(2).forEach { track ->
+            val job = viewModelScope.launch {
+                YouTubeExtractor.getAudioUrl(track.id)?.let { url ->
+                    urlCache[track.id] = url
+                }
+            }
+            predictivePrefetchJobs.add(job)
+        }
+    }
+
+    fun cancelPredictivePrefetch() {
+        predictivePrefetchJobs.forEach { it.cancel() }
+        predictivePrefetchJobs.clear()
+    }
+
     private var lastManualPlayTime = 0L
 
     private val _volume = MutableStateFlow(1.0f)
@@ -336,8 +360,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playSong(videoId: String, title: String, artist: String, artworkUrl: String, otherTracks: List<TrackEntity> = emptyList(), userTier: Int = 0, canCacheLyrics: Boolean = false) {
-        val startTime = System.currentTimeMillis()
-        android.util.Log.d("MusicViewModel", "playSong requested for $videoId at $startTime")
+        val tapTime = System.currentTimeMillis()
+        android.util.Log.d("PlaybackProfile", "User Tap: $videoId at $tapTime")
         
         lastManualPlayTime = System.currentTimeMillis()
         isPreparingManually = true
@@ -369,6 +393,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _lyrics.value = null
         _playbackError.value = null
         isHistoryRecorded = false
+        android.util.Log.d("PlaybackProfile", "Player UI Open: +${System.currentTimeMillis() - tapTime}ms")
+        android.util.Log.d("PlaybackProfile", "Metadata Ready: +${System.currentTimeMillis() - tapTime}ms")
 
         viewModelScope.launch {
             // Update Queue Manager
@@ -376,15 +402,17 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 queueManager.setQueue(otherTracks, videoId)
             }
 
-            // Fetch lyrics if Pro or if Free user has lyrics cache left
-            if (userTier >= 2 || canCacheLyrics) {
-                fetchLyrics(title, artist)
+            // Fetch lyrics in background
+            launch {
+                if (userTier >= 2 || canCacheLyrics) {
+                    fetchLyrics(title, artist)
+                }
             }
 
             try {
                 var retryCount = 0
                 while (_controller == null && retryCount < 15) {
-                    delay(100) 
+                    delay(50) 
                     retryCount++
                 }
 
@@ -414,10 +442,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             urlResult = dbTrack.localFilePath
                         }
                     }
-                    
-                    if (urlResult == null) {
-                        urlResult = urlCache[videoId]
-                    }
                 }
                 
                 val mainItemBuilder = MediaItem.Builder()
@@ -426,36 +450,31 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 
                 if (urlResult != null) {
                     mainItemBuilder.setUri(urlResult)
+                    android.util.Log.d("PlaybackProfile", "Cache Hit (Local/Downloaded): $videoId")
+                } else {
+                    // For remote streams, we let MusicService handle resolution to avoid blocking here,
+                    // BUT if we have it in urlCache, we should set it NOW to save a roundtrip to Service.
+                    urlCache[videoId]?.let {
+                        mainItemBuilder.setUri(it)
+                        android.util.Log.d("PlaybackProfile", "Cache Hit (Memory): $videoId")
+                    } ?: android.util.Log.d("PlaybackProfile", "Cache Miss: $videoId. Let Service resolve.")
                 }
                 
                 val mainItem = mainItemBuilder.build()
-                currentController.setMediaItem(mainItem)
                 
-                // Populate upcoming items
-                if (!isLocal) {
-                    val queue = queueManager.queue.value
-                    val currentIndex = queueManager.getCurrentIndex()
-                    if (currentIndex < queue.size - 1) {
-                        for (i in currentIndex + 1 until minOf(currentIndex + 3, queue.size)) {
-                            val nextTrack = queue[i]
-                            val nextItem = MediaItem.Builder()
-                                .setMediaId(nextTrack.id)
-                                .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder()
-                                    .setTitle(nextTrack.title)
-                                    .setArtist(nextTrack.artist)
-                                    .setArtworkUri(android.net.Uri.parse(nextTrack.thumbnailUrl))
-                                    .setExtras(Bundle().apply { putString("quality", finalQuality) })
-                                    .build())
-                                .build()
-                            currentController.addMediaItem(nextItem)
-                        }
-                    }
+                android.util.Log.d("PlaybackProfile", "MediaItem Ready: +${System.currentTimeMillis() - tapTime}ms")
+                
+                // Optimized: If it's already playing this item, don't reset
+                if (currentController.currentMediaItem?.mediaId == videoId && currentController.playbackState != Player.STATE_IDLE) {
+                    currentController.play()
+                } else {
+                    currentController.setMediaItem(mainItem)
+                    android.util.Log.d("PlaybackProfile", "ExoPlayer Prepare Start: +${System.currentTimeMillis() - tapTime}ms")
+                    currentController.prepare()
+                    currentController.play()
                 }
-
-                currentController.prepare()
-                currentController.play()
                 
-                if (!isLocal && urlResult == null) {
+                if (!isLocal) {
                     prefetchNext()
                 }
             } catch (e: Exception) {
@@ -474,17 +493,32 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val currentIndex = queueManager.getCurrentIndex()
         if (queue.isNotEmpty()) {
             prefetchJob = viewModelScope.launch {
-                delay(800) // Reduced delay
+                delay(1500) // Wait for current playback to stabilize
                 
-                // Prefetch next 3 songs for smoother transition
-                val nextIndices = listOf(currentIndex + 1, currentIndex + 2, currentIndex + 3)
-                for (index in nextIndices) {
-                    if (index < queue.size) {
-                        val track = queue[index]
-                        if (!urlCache.containsKey(track.id)) {
-                            android.util.Log.d("MusicViewModel", "Prefetching: ${track.title}")
-                            YouTubeExtractor.getAudioUrl(track.id)?.let { url ->
-                                urlCache[track.id] = url
+                // Prefetch ONLY the next track
+                val nextIndex = currentIndex + 1
+                if (nextIndex < queue.size) {
+                    val track = queue[nextIndex]
+                    if (!urlCache.containsKey(track.id)) {
+                        android.util.Log.d("MusicViewModel", "Prefetching Next Only: ${track.title}")
+                        YouTubeExtractor.getAudioUrl(track.id)?.let { url ->
+                            urlCache[track.id] = url
+                            
+                            // Background Preparation: Add to ExoPlayer queue if possible
+                            _controller?.let { controller ->
+                                if (controller.mediaItemCount == 1) { // Only if nothing else is queued
+                                    val nextItem = MediaItem.Builder()
+                                        .setMediaId(track.id)
+                                        .setUri(url)
+                                        .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder()
+                                            .setTitle(track.title)
+                                            .setArtist(track.artist)
+                                            .setArtworkUri(android.net.Uri.parse(track.thumbnailUrl))
+                                            .setExtras(Bundle().apply { putString("quality", _audioQuality.value) })
+                                            .build())
+                                        .build()
+                                    controller.addMediaItem(nextItem)
+                                }
                             }
                         }
                     }
@@ -492,6 +526,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
 
     fun togglePlayPause() {
         val controller = _controller

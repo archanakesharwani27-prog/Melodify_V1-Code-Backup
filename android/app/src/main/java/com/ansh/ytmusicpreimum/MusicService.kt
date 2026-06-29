@@ -14,6 +14,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
@@ -76,6 +77,9 @@ class MusicService : MediaSessionService() {
                     }
                 }
                 savePlaybackState()
+                mediaItem?.let {
+                    android.util.Log.d("PlaybackProfile", "MediaItem Active: ${it.mediaId}")
+                }
             }
             
             override fun onPositionDiscontinuity(
@@ -90,15 +94,43 @@ class MusicService : MediaSessionService() {
                 if (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING) {
                     savePlaybackState()
                 }
+                
+                when (playbackState) {
+                    Player.STATE_READY -> {
+                        android.util.Log.d("PlaybackProfile", "ExoPlayer Ready for item: ${exoPlayer.currentMediaItem?.mediaId}")
+                    }
+                    Player.STATE_BUFFERING -> {
+                        android.util.Log.d("PlaybackProfile", "ExoPlayer Buffering item: ${exoPlayer.currentMediaItem?.mediaId}")
+                    }
+                }
             }
-            
+
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
+                    android.util.Log.d("PlaybackProfile", "Playback Started: ${exoPlayer.currentMediaItem?.mediaId}")
                     startBackgroundCheck()
-                    // audioVisualizer?.enabled = true
-                } else {
-                    // audioVisualizer?.enabled = false
                 }
+            }
+        })
+
+        exoPlayer.addAnalyticsListener(object : AnalyticsListener {
+            @OptIn(UnstableApi::class)
+            override fun onRenderedFirstFrame(
+                eventTime: AnalyticsListener.EventTime,
+                output: Any,
+                renderTimeMs: Long
+            ) {
+                android.util.Log.d("PlaybackProfile", "First Audio Frame rendered for: ${exoPlayer.currentMediaItem?.mediaId}")
+            }
+            
+            @OptIn(UnstableApi::class)
+            override fun onAudioUnderrun(
+                eventTime: AnalyticsListener.EventTime,
+                bufferSize: Int,
+                bufferSizeMs: Long,
+                elapsedSinceLastFeedMs: Long
+            ) {
+                android.util.Log.w("MusicService", "Audio Underrun detected!")
             }
         })
 
