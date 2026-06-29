@@ -81,57 +81,52 @@ class HomeViewModel : ViewModel() {
                 val forYouJob = async { YouTubeExtractor.search(forYouQuery) }
                 
                 val fastResults = awaitAll(trendingJob, forYouJob)
-                _trendingSongs.value = fastResults[0].shuffled().take(10).ifEmpty { getDummyTracks("Trending") }
-                _forYouSongs.value = fastResults[1].shuffled().take(10).ifEmpty { getDummyTracks("For You") }
+                _trendingSongs.value = repository?.enrichTracks(fastResults[0].shuffled().take(10).ifEmpty { getDummyTracks("Trending") }) ?: emptyList()
+                _forYouSongs.value = repository?.enrichTracks(fastResults[1].shuffled().take(10).ifEmpty { getDummyTracks("For You") }) ?: emptyList()
                 _isLoading.value = false // Hide loader early
 
-                // 2. BACKGROUND LOAD: The rest of the sections
+                // 2. BACKGROUND LOAD: The rest of the sections (Throttled)
                 launch {
-                    val evergreenQuery = async { YouTubeExtractor.search("Hindi Sadabahar 90s hits") }
-                    val emotionalQuery = async { YouTubeExtractor.search("Dard-e-Dil Hindi Sad Songs") }
-                    val bhojpuriQuery = async { YouTubeExtractor.search("Bhojpuri Superhit Mix 2024") }
-                    val punjabiSwagQuery = async { YouTubeExtractor.search("Punjabi Swag Bass Boosted") }
-                    val bhaktiQuery = async { YouTubeExtractor.search("Bhakti Sagar Shiv Bhajan Aarti") }
-                    val sangeetQuery = async { YouTubeExtractor.search("Desi Shaadi Sangeet Vibe") }
-                    val lofiJob = async { YouTubeExtractor.search("Lofi music relaxation") }
-                    val workoutJob = async { YouTubeExtractor.search("Gym Motivation Workout Music") }
-                    val focusJob = async { YouTubeExtractor.search("Deep Focus ambient") }
-                    val radarJob = async { YouTubeExtractor.search("New Music Release India") }
-                    val retroJob = async { YouTubeExtractor.search("Evergreen Classic Hits") }
-                    val topIndiaJob = async { YouTubeExtractor.search("Top 50 Songs India") }
-                    val globalJob = async { YouTubeExtractor.search("Global Trending Billboard") }
-
-                    val results = awaitAll(
-                        lofiJob, workoutJob, focusJob, radarJob, retroJob, 
-                        topIndiaJob, globalJob, evergreenQuery, emotionalQuery, 
-                        bhojpuriQuery, punjabiSwagQuery, bhaktiQuery, sangeetQuery
+                    val moodQueries = listOf(
+                        "lofi music relaxation",
+                        "Gym Motivation Workout Music",
+                        "Deep Focus ambient"
                     )
-
+                    val smartQueries = listOf(
+                        "New Music Release India",
+                        "Evergreen Classic Hits"
+                    )
+                    val culturalQueries = listOf(
+                        "Bhakti Sagar Shiv Bhajan Aarti",
+                        "Desi Shaadi Sangeet Vibe"
+                    )
+                    
+                    // Load in smaller chunks
+                    val moodResults = moodQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
                     _moodMixes.value = listOf(
-                        "Chill / Relaxation Zone" to results[0],
-                        "Workout / Energy Booster" to results[1],
-                        "Focus / Study Mode" to results[2]
+                        "Chill / Relaxation Zone" to (repository?.enrichTracks(moodResults[0]) ?: moodResults[0]),
+                        "Workout / Energy Booster" to (repository?.enrichTracks(moodResults[1]) ?: moodResults[1]),
+                        "Focus / Study Mode" to (repository?.enrichTracks(moodResults[2]) ?: moodResults[2])
                     )
-                    _evergreenEmotionalMixes.value = listOf(
-                        "Hindi Sadabahar (यादगार नगमे)" to results[7],
-                        "Dard-e-Dil (Hindi Sad)" to results[8]
-                    )
-                    _highEnergyPartyMixes.value = listOf(
-                        "Bhojpuri Powertrack" to results[9],
-                        "Punjabi Swag / Bass-Boosted" to results[10]
-                    )
-                    _culturalFestiveMixes.value = listOf(
-                        "Bhakti Ras (भक्ति सागर)" to results[11],
-                        "Desi Shaadi / Sangeet" to results[12]
-                    )
+                    
+                    val smartResults = smartQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
                     _smartMixes.value = listOf(
-                        "Radar / New Release" to results[3],
-                        "Time Capsule" to results[4]
+                        "Radar / New Release" to (repository?.enrichTracks(smartResults[0]) ?: smartResults[0]),
+                        "Time Capsule" to (repository?.enrichTracks(smartResults[1]) ?: smartResults[1])
                     )
-                    _globalHits.value = listOf(
-                        "Top India" to results[5],
-                        "Global Trending" to results[6]
+                    
+                    // Delay slightly between chunks to reduce CPU/Network spike
+                    delay(500)
+                    
+                    val culturalResults = culturalQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
+                    _culturalFestiveMixes.value = listOf(
+                        "Bhakti Ras (भक्ति सागर)" to (repository?.enrichTracks(culturalResults[0]) ?: culturalResults[0]),
+                        "Desi Shaadi / Sangeet" to (repository?.enrichTracks(culturalResults[1]) ?: culturalResults[1])
                     )
+                    
+                    // Load remaining sections...
+                    val topIndia = YouTubeExtractor.search("Top 50 Songs India")
+                    _globalHits.value = listOf("Top India" to (repository?.enrichTracks(topIndia) ?: topIndia))
                 }
 
             } catch (e: Exception) {

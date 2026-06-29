@@ -69,6 +69,7 @@ object YouTubeExtractor {
             } ?: streamInfo.audioStreams.minByOrNull { it.bitrate }
             
             if (audioStream != null) {
+                android.util.Log.d("YouTubeExtractor", "Found audio stream: ${audioStream.url}")
                 return@withContext audioStream.url
             }
 
@@ -76,9 +77,10 @@ object YouTubeExtractor {
                 .filter { it.isVideoOnly.not() }
                 .minByOrNull { it.bitrate }
             
+            android.util.Log.d("YouTubeExtractor", "Using muxed stream fallback: ${muxedStream?.url}")
             return@withContext muxedStream?.url
-        } catch (e: Exception) {
-            android.util.Log.e("YouTubeExtractor", "Error in getAudioUrl for $videoId, trying dynamic fallback", e)
+        } catch (e: Throwable) {
+            android.util.Log.e("YouTubeExtractor", "Fatal error in getAudioUrl for $videoId", e)
             return@withContext getAudioUrlFromFallback(videoId)
         }
     }

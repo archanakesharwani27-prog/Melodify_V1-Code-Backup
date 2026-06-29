@@ -28,9 +28,6 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-
-        buildConfigField("String", "RAZORPAY_KEY_ID", "\"${localProperties.getProperty("razorpay.key.id") ?: ""}\"")
-        buildConfigField("String", "RAZORPAY_KEY_SECRET", "\"${localProperties.getProperty("razorpay.key.secret") ?: ""}\"")
     }
 
     buildTypes {
@@ -109,9 +106,6 @@ dependencies {
 
     // OkHttp
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
-    // Razorpay
-    implementation("com.razorpay:checkout:1.6.38")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

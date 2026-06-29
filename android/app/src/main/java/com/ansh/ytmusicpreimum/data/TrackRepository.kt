@@ -12,6 +12,7 @@ class TrackRepository(private val trackDao: TrackDao) {
     val allTracks: Flow<List<TrackEntity>> = trackDao.getAllTracks()
     val likedTracks: Flow<List<TrackEntity>> = trackDao.getLikedTracks()
     val history: Flow<List<HistoryEntity>> = trackDao.getHistory()
+    val recentSearches: Flow<List<String>> = trackDao.getRecentSearches()
 
     suspend fun insert(track: TrackEntity) {
         trackDao.insertTrack(track)
@@ -23,10 +24,45 @@ class TrackRepository(private val trackDao: TrackDao) {
             trackId = track.id,
             title = track.title,
             artist = track.artist,
-            thumbnailUrl = track.thumbnailUrl
+            thumbnailUrl = track.thumbnailUrl,
+            timestamp = System.currentTimeMillis() // Update timestamp to bring to top
         )
         trackDao.insertHistory(historyItem)
         syncHistoryToCloud(historyItem)
+    }
+
+    suspend fun enrichTracks(tracks: List<TrackEntity>): List<TrackEntity> {
+        return tracks.map { track ->
+            val dbTrack = trackDao.getTrackById(track.id)
+            if (dbTrack != null) {
+                track.copy(
+                    isDownloaded = dbTrack.isDownloaded,
+                    isLiked = dbTrack.isLiked
+                )
+            } else {
+                track
+            }
+        }
+    }
+
+    suspend fun addToSearchHistory(query: String) {
+        if (query.isBlank()) return
+        val item = SearchHistoryEntity(query = query, timestamp = System.currentTimeMillis())
+        trackDao.insertSearch(item)
+        syncSearchHistoryToCloud(item)
+    }
+
+    suspend fun deleteSearch(query: String) {
+        trackDao.deleteSearch(query)
+        val userId = auth.currentUser?.uid ?: return
+        firestore.collection("users").document(userId)
+            .collection("search_history").document(query.replace("/", "_"))
+            .delete().await()
+    }
+
+    suspend fun clearSearchHistory() {
+        trackDao.clearSearchHistory()
+        // Optionally clear cloud too, but usually we just keep it or clear on demand
     }
 
     suspend fun toggleLike(trackId: String, title: String, artist: String, thumbnailUrl: String) {
@@ -69,6 +105,17 @@ class TrackRepository(private val trackDao: TrackDao) {
         }
     }
 
+    private suspend fun syncSearchHistoryToCloud(search: SearchHistoryEntity) {
+        val userId = auth.currentUser?.uid ?: return
+        try {
+            firestore.collection("users").document(userId)
+                .collection("search_history").document(search.query.replace("/", "_"))
+                .set(search).await()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     suspend fun syncWithCloud() {
         val userId = auth.currentUser?.uid ?: return
         try {
@@ -82,13 +129,21 @@ class TrackRepository(private val trackDao: TrackDao) {
 
             // 2. Sync History
             val historySnapshot = firestore.collection("users").document(userId)
-                .collection("history").limit(50).get().await()
+                .collection("history").get().await()
             val cloudHistory = historySnapshot.toObjects(HistoryEntity::class.java)
             for (item in cloudHistory) {
                 trackDao.insertHistory(item)
             }
 
-            // 3. Sync Playlists (Expanding sync logic)
+            // 3. Sync Search History
+            val searchSnapshot = firestore.collection("users").document(userId)
+                .collection("search_history").get().await()
+            val cloudSearch = searchSnapshot.toObjects(SearchHistoryEntity::class.java)
+            for (item in cloudSearch) {
+                trackDao.insertSearch(item)
+            }
+
+            // 4. Sync Playlists
             syncPlaylistsFromCloud(userId)
         } catch (e: Exception) {
             e.printStackTrace()

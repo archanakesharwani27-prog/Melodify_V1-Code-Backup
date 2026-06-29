@@ -17,9 +17,17 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionCommands
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import android.media.audiofx.Visualizer
+import kotlinx.coroutines.flow.MutableStateFlow
+
+object VisualizerData {
+    val fftData = MutableStateFlow(ByteArray(0))
+    val waveformData = MutableStateFlow(ByteArray(0))
+}
 
 class MusicService : MediaSessionService() {
 
@@ -28,6 +36,7 @@ class MusicService : MediaSessionService() {
     private var equalizer: Equalizer? = null
     private var bassBoost: BassBoost? = null
     private var virtualizer: Virtualizer? = null
+    private var audioVisualizer: Visualizer? = null
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var fadeJob: Job? = null
@@ -52,6 +61,7 @@ class MusicService : MediaSessionService() {
         exoPlayer.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 initEqualizer(audioSessionId)
+                // initVisualizer(audioSessionId) // Disabled for now
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -63,6 +73,9 @@ class MusicService : MediaSessionService() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
                     startBackgroundCheck()
+                    // audioVisualizer?.enabled = true
+                } else {
+                    // audioVisualizer?.enabled = false
                 }
             }
         })
@@ -70,6 +83,62 @@ class MusicService : MediaSessionService() {
         startPositionMonitor()
 
         val callback = object : MediaSession.Callback {
+            @OptIn(UnstableApi::class)
+            override fun onConnect(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo
+            ): MediaSession.ConnectionResult {
+                val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                    .build()
+                val playerCommands = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
+                    .addAllCommands()
+                    .build()
+                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                    .setAvailableSessionCommands(sessionCommands)
+                    .setAvailablePlayerCommands(playerCommands)
+                    .build()
+            }
+
+            @OptIn(UnstableApi::class)
+            override fun onAddMediaItems(
+                mediaSession: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                mediaItems: MutableList<MediaItem>
+            ): ListenableFuture<MutableList<MediaItem>> {
+                val settableFuture = com.google.common.util.concurrent.SettableFuture.create<MutableList<MediaItem>>()
+                
+                serviceScope.launch(Dispatchers.IO) {
+                    try {
+                        val updatedItems = mediaItems.map { item ->
+                            if (item.requestMetadata.mediaUri != null || item.localConfiguration?.uri != null || (item.mediaId.startsWith("http") && item.localConfiguration?.uri == null && item.requestMetadata.mediaUri == null)) {
+                                item
+                            } else {
+                                val videoId = item.mediaId
+                                val quality = item.mediaMetadata.extras?.getString("quality") ?: "Medium"
+                                android.util.Log.d("MusicService", "Resolving URI for $videoId with quality $quality")
+                                
+                                val url = withTimeoutOrNull(15000) {
+                                    YouTubeExtractor.getAudioUrl(videoId, quality)
+                                }
+                                if (url != null) {
+                                    android.util.Log.d("MusicService", "Successfully resolved URI for $videoId")
+                                    item.buildUpon().setUri(url).build()
+                                } else {
+                                    android.util.Log.e("MusicService", "Failed to resolve URI for $videoId (Timeout or Error)")
+                                    item
+                                }
+                            }
+                        }.toMutableList()
+                        settableFuture.set(updatedItems)
+                    } catch (e: Throwable) {
+                        android.util.Log.e("MusicService", "Error in onAddMediaItems", e)
+                        settableFuture.set(mediaItems)
+                    }
+                }
+                
+                return settableFuture
+            }
+
             override fun onCustomCommand(
                 session: MediaSession,
                 controller: MediaSession.ControllerInfo,
@@ -121,6 +190,29 @@ class MusicService : MediaSessionService() {
             .setCallback(callback)
             .build()
     }
+
+    private fun initVisualizer(audioSessionId: Int) {
+        try {
+            audioVisualizer?.release()
+            audioVisualizer = Visualizer(audioSessionId).apply {
+                // Use a smaller capture size for performance
+                captureSize = 512
+                setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
+                    override fun onWaveFormDataCapture(visualizer: Visualizer?, waveform: ByteArray?, samplingRate: Int) {
+                        waveform?.let { VisualizerData.waveformData.value = it.copyOf() }
+                    }
+
+                    override fun onFftDataCapture(visualizer: Visualizer?, fft: ByteArray?, samplingRate: Int) {
+                        fft?.let { VisualizerData.fftData.value = it.copyOf() }
+                    }
+                }, Visualizer.getMaxCaptureRate() / 4, true, true) // Reduced update frequency
+                enabled = exoPlayer.isPlaying
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicService", "Failed to init Visualizer", e)
+        }
+    }
+
 
     private var backgroundCheckJob: Job? = null
     private fun startBackgroundCheck() {
@@ -237,6 +329,8 @@ class MusicService : MediaSessionService() {
         bassBoost = null
         virtualizer?.release()
         virtualizer = null
+        audioVisualizer?.release()
+        audioVisualizer = null
         mediaSession?.run {
             player.release()
             release()
@@ -247,8 +341,7 @@ class MusicService : MediaSessionService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaSession?.player
-        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
-            stopSelf()
-        }
+        player?.pause()
+        stopSelf()
     }
 }

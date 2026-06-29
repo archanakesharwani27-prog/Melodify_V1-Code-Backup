@@ -33,11 +33,16 @@ data class PlaylistTrackCrossRef(
 
 @Entity(tableName = "playback_history")
 data class HistoryEntity(
-    @PrimaryKey(autoGenerate = true) val historyId: Long = 0,
-    val trackId: String = "",
+    @PrimaryKey val trackId: String = "",
     val title: String = "",
     val artist: String = "",
     val thumbnailUrl: String = "",
+    var timestamp: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "search_history")
+data class SearchHistoryEntity(
+    @PrimaryKey val query: String = "",
     val timestamp: Long = System.currentTimeMillis()
 )
 

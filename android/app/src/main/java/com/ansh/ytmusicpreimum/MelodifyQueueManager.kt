@@ -8,11 +8,12 @@ class MelodifyQueueManager {
     private val _queue = MutableStateFlow<List<TrackEntity>>(emptyList())
     val queue = _queue.asStateFlow()
 
-    private var currentIndex = -1
+    private val _currentIndex = MutableStateFlow(-1)
+    val currentIndex = _currentIndex.asStateFlow()
 
     fun setQueue(tracks: List<TrackEntity>, startId: String? = null) {
         _queue.value = tracks
-        currentIndex = if (startId != null) {
+        _currentIndex.value = if (startId != null) {
             tracks.indexOfFirst { it.id == startId }.coerceAtLeast(-1)
         } else {
             -1
@@ -21,7 +22,7 @@ class MelodifyQueueManager {
 
     fun playNext(track: TrackEntity) {
         val currentList = _queue.value.toMutableList()
-        val insertIndex = currentIndex + 1
+        val insertIndex = _currentIndex.value + 1
         
         // Remove if already in queue to avoid duplicates in upcoming
         currentList.removeAll { it.id == track.id }
@@ -42,11 +43,20 @@ class MelodifyQueueManager {
         }
     }
 
+    fun insertAt(index: Int, track: TrackEntity) {
+        val currentList = _queue.value.toMutableList()
+        if (index in 0..currentList.size) {
+            currentList.add(index, track)
+            if (index <= _currentIndex.value) _currentIndex.value++
+            _queue.value = currentList
+        }
+    }
+
     fun removeAt(index: Int) {
         val currentList = _queue.value.toMutableList()
         if (index in currentList.indices) {
             currentList.removeAt(index)
-            if (index <= currentIndex) currentIndex--
+            if (index <= _currentIndex.value) _currentIndex.value--
             _queue.value = currentList
         }
     }
@@ -58,12 +68,12 @@ class MelodifyQueueManager {
             currentList.add(toIndex, track)
             
             // Adjust currentIndex
-            if (currentIndex == fromIndex) {
-                currentIndex = toIndex
-            } else if (fromIndex < currentIndex && toIndex >= currentIndex) {
-                currentIndex--
-            } else if (fromIndex > currentIndex && toIndex <= currentIndex) {
-                currentIndex++
+            if (_currentIndex.value == fromIndex) {
+                _currentIndex.value = toIndex
+            } else if (fromIndex < _currentIndex.value && toIndex >= _currentIndex.value) {
+                _currentIndex.value--
+            } else if (fromIndex > _currentIndex.value && toIndex <= _currentIndex.value) {
+                _currentIndex.value++
             }
             
             _queue.value = currentList
@@ -72,24 +82,25 @@ class MelodifyQueueManager {
 
     fun getNextTrack(): TrackEntity? {
         val currentList = _queue.value
-        if (currentIndex < currentList.size - 1) {
-            currentIndex++
-            return currentList[currentIndex]
+        if (_currentIndex.value < currentList.size - 1) {
+            _currentIndex.value++
+            return currentList[_currentIndex.value]
         }
         return null
     }
 
     fun getPreviousTrack(): TrackEntity? {
         val currentList = _queue.value
-        if (currentIndex > 0) {
-            currentIndex--
-            return currentList[currentIndex]
+        if (_currentIndex.value > 0) {
+            _currentIndex.value--
+            return currentList[_currentIndex.value]
         }
         return null
     }
     
-    fun getCurrentIndex() = currentIndex
+    fun getCurrentIndex() = _currentIndex.value
     fun setCurrentIndex(index: Int) {
-        currentIndex = index
+        _currentIndex.value = index
     }
 }
+

@@ -53,6 +53,19 @@ interface TrackDao {
     @Query("SELECT * FROM playback_history ORDER BY timestamp DESC")
     fun getHistory(): Flow<List<HistoryEntity>>
 
+    // Search History
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSearch(search: SearchHistoryEntity)
+
+    @Query("SELECT `query` FROM search_history ORDER BY timestamp DESC LIMIT 10")
+    fun getRecentSearches(): Flow<List<String>>
+
+    @Query("DELETE FROM search_history WHERE `query` = :query")
+    suspend fun deleteSearch(query: String)
+
+    @Query("DELETE FROM search_history")
+    suspend fun clearSearchHistory()
+
     @Query("DELETE FROM playback_history")
     suspend fun clearHistory()
 

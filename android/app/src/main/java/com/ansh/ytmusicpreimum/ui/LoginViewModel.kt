@@ -68,17 +68,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
-    private val _paymentSuccess = MutableStateFlow<Pair<Int, Int>?>(null)
-    val paymentSuccess: StateFlow<Pair<Int, Int>?> = _paymentSuccess
-
-    fun onPaymentVerified(tier: Int, months: Int) {
-        _paymentSuccess.value = tier to months
-    }
-
-    fun consumePayment() {
-        _paymentSuccess.value = null
-    }
-
     val isGuestUser: Boolean
         get() = _userEmail.value == "guest@melodify.com" || _userName.value == "Guest User"
 
