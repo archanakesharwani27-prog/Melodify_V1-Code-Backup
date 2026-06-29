@@ -492,6 +492,7 @@ fun MainScreen(
                                 onThemeChange = onThemeChange,
                                 audioQuality = audioQuality,
                                 onQualityChange = { musicViewModel.setAudioQuality(it) },
+                                musicViewModel = musicViewModel,
                                 loginViewModel = loginViewModel,
                                 navController = navController,
                                 userTier = userTier,
@@ -1949,6 +1950,7 @@ fun SettingsScreen(
     onThemeChange: (Boolean) -> Unit,
     audioQuality: String,
     onQualityChange: (String) -> Unit,
+    musicViewModel: MusicViewModel,
     loginViewModel: LoginViewModel,
     navController: NavController,
     userTier: Int,
@@ -1957,6 +1959,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val downloadNetworkType by loginViewModel.downloadNetworkType.collectAsState()
+    val crossfadeDuration by musicViewModel.crossfadeDuration.collectAsState()
     val userName by loginViewModel.userName.collectAsState()
     val userEmail by loginViewModel.userEmail.collectAsState()
     val userPhoto by loginViewModel.userPhotoUrl.collectAsState()
@@ -2042,6 +2045,26 @@ fun SettingsScreen(
                         else -> "Medium"
                     }
                     onQualityChange(nextQuality)
+                }
+                SettingsItemRow(
+                    title = "Crossfade",
+                    subtitle = when (crossfadeDuration) {
+                        0L -> "Off"
+                        2000L -> "2 Seconds"
+                        4000L -> "4 Seconds"
+                        6000L -> "6 Seconds"
+                        else -> "Off"
+                    },
+                    icon = Icons.Default.Shuffle, // Using shuffle icon as a placeholder for transition
+                    isDarkTheme = isDarkTheme
+                ) {
+                    val nextDuration = when (crossfadeDuration) {
+                        0L -> 2000L
+                        2000L -> 4000L
+                        4000L -> 6000L
+                        else -> 0L
+                    }
+                    musicViewModel.setCrossfadeDuration(nextDuration)
                 }
             }
 
@@ -2905,28 +2928,73 @@ fun TrackItem(
 
 @Composable
 fun MiniPlayer(mediaItem: androidx.media3.common.MediaItem, isPlaying: Boolean, isBuffering: Boolean, onTogglePlay: () -> Unit, onClick: () -> Unit, onDismiss: () -> Unit) {
-    Surface(modifier = Modifier
-        .fillMaxWidth()
-        .height(64.dp)
-        .padding(horizontal = 8.dp)
-        .clip(RoundedCornerShape(12.dp))
-        .clickable(onClick = onClick), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), tonalElevation = 8.dp, border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(72.dp)
+            .padding(horizontal = 12.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick), 
+        color = MaterialTheme.colorScheme.surface, 
+        tonalElevation = 8.dp, 
+        shadowElevation = 12.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+    ) {
         Row(modifier = Modifier
             .padding(8.dp)
             .fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            FuturisticThumbnail(model = mediaItem.mediaMetadata.artworkUri, modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(8.dp)))
-            Spacer(modifier = Modifier.width(12.dp))
+            
+            FuturisticThumbnail(
+                model = mediaItem.mediaMetadata.artworkUri, 
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
             Column(modifier = Modifier.weight(1f)) {
-                Text(mediaItem.mediaMetadata.title?.toString() ?: "Unknown", color = MaterialTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(mediaItem.mediaMetadata.artist?.toString() ?: "Unknown", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = mediaItem.mediaMetadata.title?.toString() ?: "Unknown", 
+                    color = MaterialTheme.colorScheme.onSurface, 
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), 
+                    maxLines = 1, 
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = mediaItem.mediaMetadata.artist?.toString() ?: "Unknown", 
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, 
+                    style = MaterialTheme.typography.bodySmall, 
+                    maxLines = 1, 
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            if (isBuffering) CircularProgressIndicator(modifier = Modifier
-                .size(24.dp)
-                .padding(4.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
-            else AnimatedIconButton(onClick = onTogglePlay) { Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
-            AnimatedIconButton(onClick = onDismiss) { Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(16.dp), tint = GrayText) }
+            
+            if (isBuffering) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(32.dp).padding(4.dp), 
+                    color = MaterialTheme.colorScheme.primary, 
+                    strokeWidth = 3.dp
+                )
+            } else {
+                AnimatedIconButton(onClick = onTogglePlay) { 
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, 
+                        contentDescription = "Toggle Playback", 
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    ) 
+                }
+            }
+            
+            AnimatedIconButton(onClick = onDismiss) { 
+                Icon(
+                    imageVector = Icons.Default.Close, 
+                    contentDescription = "Dismiss Player", 
+                    modifier = Modifier.size(20.dp), 
+                    tint = GrayText
+                ) 
+            }
         }
     }
 }
@@ -2955,14 +3023,13 @@ fun PlayerScreen(
 fun PlayerPortrait(
     mediaItem: androidx.media3.common.MediaItem, isPlaying: Boolean, isBuffering: Boolean, currentPosition: Long, duration: Long, isLiked: Boolean, volume: Float, shuffleModeEnabled: Boolean, repeatMode: Int, eqBands: List<EqBand>, eqLevelRange: Pair<Short, Short>, bassBoostStrength: Short, virtualizerStrength: Short, lyrics: String?, isFetchingLyrics: Boolean, userTier: Int, downloadState: DownloadState?, onLevelChange: (Int, Short) -> Unit, onBassBoostChange: (Short) -> Unit, onVirtualizerChange: (Short) -> Unit, onDownloadClick: () -> Unit, onCancelDownload: () -> Unit, onTogglePlay: () -> Unit, onSeek: (Long) -> Unit, onVolumeChange: (Float) -> Unit, onSkipNext: () -> Unit, onSkipPrevious: () -> Unit, onToggleShuffle: () -> Unit, onToggleRepeat: () -> Unit, onClose: () -> Unit, onToggleLike: () -> Unit, onOpenQueue: () -> Unit, onOpenSettings: () -> Unit, onAddToPlaylist: () -> Unit
 ) {
-    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val pagerState = rememberPagerState(pageCount = { 1 })
     val scope = rememberCoroutineScope()
     
     BackHandler { onClose() }
     
-    var skipDirection by remember { mutableStateOf(0) }
+    var skipDirection by remember { mutableIntStateOf(0) }
     val rippleAlpha = remember { Animatable(0f) }
     val rippleScale = remember { Animatable(0f) }
     var tapCount by remember { mutableIntStateOf(0) }
@@ -2978,9 +3045,9 @@ fun PlayerPortrait(
                 skipDirection = 1
                 scope.launch {
                     rippleScale.snapTo(0f)
-                    rippleAlpha.snapTo(0.6f)
-                    launch { rippleScale.animateTo(1.5f, tween(300)) }
-                    launch { rippleAlpha.animateTo(0f, tween(300)) }
+                    rippleAlpha.snapTo(0.4f)
+                    launch { rippleScale.animateTo(1.5f, tween(MotionMedium)) }
+                    launch { rippleAlpha.animateTo(0f, tween(MotionMedium)) }
                 }
                 onSkipNext()
             } else if (tapCount >= 3) {
@@ -2988,9 +3055,9 @@ fun PlayerPortrait(
                 skipDirection = -1
                 scope.launch {
                     rippleScale.snapTo(0f)
-                    rippleAlpha.snapTo(0.6f)
-                    launch { rippleScale.animateTo(1.5f, tween(300)) }
-                    launch { rippleAlpha.animateTo(0f, tween(300)) }
+                    rippleAlpha.snapTo(0.4f)
+                    launch { rippleScale.animateTo(1.5f, tween(MotionMedium)) }
+                    launch { rippleAlpha.animateTo(0f, tween(MotionMedium)) }
                 }
                 onSkipPrevious()
             }
@@ -2999,7 +3066,7 @@ fun PlayerPortrait(
     }
 
     LaunchedEffect(mediaItem) {
-        delay(500)
+        delay(MotionMedium.toLong())
         skipDirection = 0
     }
 
@@ -3008,11 +3075,9 @@ fun PlayerPortrait(
         AsyncImage(
             model = mediaItem.mediaMetadata.artworkUri,
             contentDescription = null,
-            modifier = Modifier
-                .fillMaxSize()
-                .blur(20.dp), // Reduced blur for better performance
+            modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
-            alpha = 0.5f // Use alpha instead of heavy gradient overlay where possible
+            alpha = 0.4f
         )
         
         Box(modifier = Modifier
@@ -3020,8 +3085,9 @@ fun PlayerPortrait(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color.Black.copy(alpha = 0.4f),
-                        Color.Black.copy(alpha = 0.85f)
+                        Color.Black.copy(alpha = 0.3f),
+                        Color.Black.copy(alpha = 0.7f),
+                        Color.Black
                     )
                 )
             ))
@@ -3030,21 +3096,25 @@ fun PlayerPortrait(
 
         Column(modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            .padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             
             // --- TOP BAR ---
-            Row(modifier = Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.fillMaxWidth().height(64.dp), verticalAlignment = Alignment.CenterVertically) {
                 AnimatedIconButton(onClick = { onClose() }) { 
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = contentColor, modifier = Modifier.size(32.dp)) 
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close Player", tint = contentColor, modifier = Modifier.size(32.dp)) 
                 }
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) { 
-                    Text("NOW PLAYING", color = contentColor.copy(alpha = 0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp) 
+                    Text(
+                        text = "NOW PLAYING", 
+                        color = contentColor.copy(alpha = 0.6f), 
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black, letterSpacing = 2.sp)
+                    ) 
                 }
                 
                 var showMoreMenu by remember { mutableStateOf(false) }
                 Box {
                     AnimatedIconButton(onClick = { showMoreMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More", tint = contentColor, modifier = Modifier.size(28.dp))
+                        Icon(Icons.Default.MoreVert, contentDescription = "More options", tint = contentColor, modifier = Modifier.size(28.dp))
                     }
                     DropdownMenu(
                         expanded = showMoreMenu,
@@ -3067,104 +3137,112 @@ fun PlayerPortrait(
                         )
                     }
                 }
-                
-                AnimatedIconButton(onClick = { onOpenQueue() }) { 
-                    Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null, tint = contentColor, modifier = Modifier.size(32.dp)) 
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            // --- ARTWORK ---
-            HorizontalPager(state = pagerState, modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)) { page ->
-                Box(modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { 
-                        cameraDistance = 8 * density 
-                        scaleX = 0.99f
-                        scaleY = 0.99f
-                    }) {
-                    Box(modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(24.dp))
-                        .pointerInput(Unit) { detectTapGestures(onTap = { handleTap() }) }) {
-                        AnimatedContent(
-                            targetState = mediaItem.mediaId,
-                            transitionSpec = {
-                                val enter = if (skipDirection == 1) {
-                                    slideInHorizontally(initialOffsetX = { (it * 0.1f).toInt() }) + fadeIn(tween(MotionMedium)) + scaleIn(initialScale = 0.92f, animationSpec = tween(MotionMedium))
-                                } else if (skipDirection == -1) {
-                                    slideInHorizontally(initialOffsetX = { -(it * 0.1f).toInt() }) + fadeIn(tween(MotionMedium)) + scaleIn(initialScale = 0.92f, animationSpec = tween(MotionMedium))
-                                } else {
-                                    fadeIn(tween(MotionLarge)) + scaleIn(initialScale = 0.96f, animationSpec = tween(MotionLarge))
-                                }
-                                val exit = if (skipDirection == 1) {
-                                    slideOutHorizontally(targetOffsetX = { -(it * 0.1f).toInt() }) + fadeOut(tween(MotionMedium)) + scaleOut(targetScale = 0.92f, animationSpec = tween(MotionMedium))
-                                } else if (skipDirection == -1) {
-                                    slideOutHorizontally(targetOffsetX = { (it * 0.1f).toInt() }) + fadeOut(tween(MotionMedium)) + scaleOut(targetScale = 0.92f, animationSpec = tween(MotionMedium))
-                                } else {
-                                    fadeOut(tween(MotionLarge)) + scaleOut(targetScale = 0.96f, animationSpec = tween(MotionLarge))
-                                }
-                                (enter togetherWith exit).using(SizeTransform(clip = false))
-                            },
-                            label = "ArtworkTransition"
-                        ) { _ -> 
-                            FuturisticThumbnail(model = mediaItem.mediaMetadata.artworkUri, modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    shadowElevation = 24f
-                                    shape = RoundedCornerShape(24.dp)
-                                    clip = true
-                                })
-                        }
-                        Canvas(modifier = Modifier.fillMaxSize()) { drawCircle(color = Color(0xFF00B29A).copy(alpha = rippleAlpha.value), radius = size.minDimension * rippleScale.value, center = center) }
-                    }
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            // --- SONG INFO ---
-            Column(modifier = Modifier.fillMaxWidth()) {
-                AnimatedContent(
-                    targetState = mediaItem.mediaMetadata.title?.toString() ?: "Unknown",
-                    transitionSpec = { fadeIn(tween(400, delayMillis = 100)) + slideInVertically { it / 2 } togetherWith fadeOut(tween(400)) },
-                    label = "TitleAnimation"
-                ) { title ->
-                    Text(
-                        text = title, 
-                        color = contentColor, 
-                        fontSize = 26.sp, 
-                        fontWeight = FontWeight.ExtraBold, 
-                        maxLines = 1, 
-                        modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
-                    )
-                }
-                
-                AnimatedContent(
-                    targetState = mediaItem.mediaMetadata.artist?.toString() ?: "Unknown",
-                    transitionSpec = { fadeIn(tween(400, delayMillis = 150)) + slideInVertically { it / 2 } togetherWith fadeOut(tween(400)) },
-                    label = "ArtistAnimation"
-                ) { artist ->
-                    Text(
-                        text = artist, 
-                        color = contentColor.copy(alpha = 0.6f), 
-                        fontSize = 18.sp, 
-                        fontWeight = FontWeight.Medium, 
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
             }
             
             Spacer(modifier = Modifier.height(24.dp))
             
+            // --- ARTWORK ---
+            HorizontalPager(state = pagerState, modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .graphicsLayer {
+                    shadowElevation = 40f
+                    shape = RoundedCornerShape(24.dp)
+                    clip = true
+                }) { page ->
+                Box(modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures(onTap = { handleTap() }) }) {
+                    AnimatedContent(
+                        targetState = mediaItem.mediaId,
+                        transitionSpec = {
+                            val enter = if (skipDirection == 1) {
+                                slideInHorizontally(initialOffsetX = { (it * 0.2f).toInt() }) + fadeIn(tween(MotionMedium)) + scaleIn(initialScale = 0.95f, animationSpec = tween(MotionMedium))
+                            } else if (skipDirection == -1) {
+                                slideInHorizontally(initialOffsetX = { -(it * 0.2f).toInt() }) + fadeIn(tween(MotionMedium)) + scaleIn(initialScale = 0.95f, animationSpec = tween(MotionMedium))
+                            } else {
+                                fadeIn(tween(MotionLarge)) + scaleIn(initialScale = 0.96f, animationSpec = tween(MotionLarge))
+                            }
+                            val exit = if (skipDirection == 1) {
+                                slideOutHorizontally(targetOffsetX = { -(it * 0.2f).toInt() }) + fadeOut(tween(MotionMedium)) + scaleOut(targetScale = 0.95f, animationSpec = tween(MotionMedium))
+                            } else if (skipDirection == -1) {
+                                slideOutHorizontally(targetOffsetX = { (it * 0.2f).toInt() }) + fadeOut(tween(MotionMedium)) + scaleOut(targetScale = 0.95f, animationSpec = tween(MotionMedium))
+                            } else {
+                                fadeOut(tween(MotionLarge)) + scaleOut(targetScale = 0.96f, animationSpec = tween(MotionLarge))
+                            }
+                            (enter togetherWith exit).using(SizeTransform(clip = false))
+                        },
+                        label = "ArtworkTransition"
+                    ) { _ -> 
+                        FuturisticThumbnail(
+                            model = mediaItem.mediaMetadata.artworkUri, 
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    Canvas(modifier = Modifier.fillMaxSize()) { 
+                        drawCircle(color = Color(0xFF00E5FF).copy(alpha = rippleAlpha.value), radius = size.minDimension * rippleScale.value, center = center) 
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(48.dp))
+            
+            // --- SONG INFO ---
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    AnimatedContent(
+                        targetState = mediaItem.mediaMetadata.title?.toString() ?: "Unknown",
+                        transitionSpec = { fadeIn(tween(MotionMedium)) + slideInVertically { it / 2 } togetherWith fadeOut(tween(MotionMedium)) },
+                        label = "TitleAnimation"
+                    ) { title ->
+                        Text(
+                            text = title, 
+                            color = contentColor, 
+                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                            maxLines = 1, 
+                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+                        )
+                    }
+                    
+                    AnimatedContent(
+                        targetState = if (isBuffering) "Buffering..." else (mediaItem.mediaMetadata.artist?.toString() ?: "Unknown"),
+                        transitionSpec = { fadeIn(tween(MotionMedium, delayMillis = 50)) + slideInVertically { it / 2 } togetherWith fadeOut(tween(MotionMedium)) },
+                        label = "ArtistAnimation"
+                    ) { artist ->
+                        Text(
+                            text = artist, 
+                            color = if (isBuffering) MaterialTheme.colorScheme.primary else contentColor.copy(alpha = 0.7f), 
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = if (isBuffering) FontWeight.Bold else FontWeight.Normal
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                
+                AnimatedIconButton(
+                    onClick = { onToggleLike() },
+                    modifier = Modifier.size(48.dp)
+                ) { 
+                    Icon(
+                        imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, 
+                        contentDescription = "Like song", 
+                        tint = if (isLiked) Color.Red else contentColor, 
+                        modifier = Modifier.size(32.dp)
+                    ) 
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(32.dp))
+            
             // --- SEEK BAR ---
-            val sliderValue = if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f
+            val progress = remember(currentPosition, duration) {
+                if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f
+            }
+            
             Slider(
-                value = sliderValue, 
+                value = progress, 
                 onValueChange = { onSeek((it * duration).toLong()) }, 
                 colors = SliderDefaults.colors(
                     thumbColor = contentColor, 
@@ -3173,9 +3251,10 @@ fun PlayerPortrait(
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) { 
-                Text(formatTime(currentPosition), color = contentColor.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.Bold) 
-                Text(formatTime(duration), color = contentColor.copy(alpha = 0.5f), fontSize = 12.sp, fontWeight = FontWeight.Bold) 
+            
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { 
+                Text(formatTime(currentPosition), color = contentColor.copy(alpha = 0.6f), style = MaterialTheme.typography.labelMedium) 
+                Text(formatTime(duration), color = contentColor.copy(alpha = 0.6f), style = MaterialTheme.typography.labelMedium) 
             }
             
             Spacer(modifier = Modifier.height(24.dp))
@@ -3183,47 +3262,53 @@ fun PlayerPortrait(
             // --- CONTROLS ---
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 AnimatedIconButton(onClick = { onToggleShuffle() }, modifier = Modifier.size(48.dp)) { 
-                    Icon(Icons.Default.Shuffle, contentDescription = null, tint = if (shuffleModeEnabled) MaterialTheme.colorScheme.primary else contentColor) 
+                    Icon(
+                        imageVector = Icons.Default.Shuffle, 
+                        contentDescription = "Toggle Shuffle", 
+                        tint = if (shuffleModeEnabled) MaterialTheme.colorScheme.primary else contentColor.copy(alpha = 0.8f)
+                    ) 
                 }
-                AnimatedIconButton(onClick = { onSkipPrevious() }, modifier = Modifier.size(56.dp)) { 
-                    Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = contentColor, modifier = Modifier.size(44.dp)) 
+                AnimatedIconButton(onClick = { onSkipPrevious() }, modifier = Modifier.size(64.dp)) { 
+                    Icon(Icons.Default.SkipPrevious, contentDescription = "Previous Song", tint = contentColor, modifier = Modifier.size(48.dp)) 
                 }
                 
                 PlayPauseMorph(isPlaying, isBuffering, onClick = { onTogglePlay() })
                 
-                AnimatedIconButton(onClick = { onSkipNext() }, modifier = Modifier.size(56.dp)) { 
-                    Icon(Icons.Default.SkipNext, contentDescription = null, tint = contentColor, modifier = Modifier.size(44.dp)) 
+                AnimatedIconButton(onClick = { onSkipNext() }, modifier = Modifier.size(64.dp)) { 
+                    Icon(Icons.Default.SkipNext, contentDescription = "Next Song", tint = contentColor, modifier = Modifier.size(48.dp)) 
                 }
                 AnimatedIconButton(onClick = { onToggleRepeat() }, modifier = Modifier.size(48.dp)) { 
-                    Icon(when (repeatMode) { Player.REPEAT_MODE_ONE -> Icons.Default.RepeatOne; else -> Icons.Default.Repeat }, contentDescription = null, tint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else contentColor) 
+                    Icon(
+                        imageVector = when (repeatMode) { 
+                            Player.REPEAT_MODE_ONE -> Icons.Default.RepeatOne
+                            else -> Icons.Default.Repeat 
+                        }, 
+                        contentDescription = "Toggle Repeat", 
+                        tint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else contentColor.copy(alpha = 0.8f)
+                    ) 
                 }
             }
             
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(40.dp))
             
-            // --- VOLUME & LIKE ---
-            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                     Icon(Icons.AutoMirrored.Filled.VolumeDown, contentDescription = null, tint = contentColor.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
-                     Slider(
-                         value = volume, 
-                         onValueChange = onVolumeChange, 
-                         modifier = Modifier.weight(1f).padding(horizontal = 12.dp).height(24.dp), 
-                         colors = SliderDefaults.colors(
-                             thumbColor = contentColor.copy(alpha = 0.9f), 
-                             activeTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                             inactiveTrackColor = contentColor.copy(alpha = 0.15f)
-                         )
+            // --- VOLUME & QUEUE ---
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                 Icon(Icons.AutoMirrored.Filled.VolumeDown, contentDescription = null, tint = contentColor.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+                 Slider(
+                     value = volume, 
+                     onValueChange = onVolumeChange, 
+                     modifier = Modifier.weight(1f).padding(horizontal = 12.dp).height(32.dp), 
+                     colors = SliderDefaults.colors(
+                         thumbColor = contentColor, 
+                         activeTrackColor = MaterialTheme.colorScheme.primary,
+                         inactiveTrackColor = contentColor.copy(alpha = 0.1f)
                      )
-                     AnimatedIconButton(
-                         onClick = { onToggleLike(); val msg = if (isLiked) "Removed" else "Added"; Toast.makeText(context, msg, Toast.LENGTH_SHORT).show() },
-                         modifier = Modifier.size(40.dp)
-                     ) { 
-                         Icon(if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, contentDescription = null, tint = if (isLiked) Color.Red else contentColor, modifier = Modifier.size(28.dp)) 
-                     }
+                 )
+                 AnimatedIconButton(onClick = { onOpenQueue() }) { 
+                    Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "Open Queue", tint = contentColor, modifier = Modifier.size(32.dp)) 
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp)) // Extra space at bottom
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
@@ -3233,16 +3318,18 @@ fun PlayerPortrait(
 fun PlayerLandscape(
     mediaItem: androidx.media3.common.MediaItem, isPlaying: Boolean, isBuffering: Boolean, currentPosition: Long, duration: Long, isLiked: Boolean, volume: Float, shuffleModeEnabled: Boolean, repeatMode: Int, eqBands: List<EqBand>, eqLevelRange: Pair<Short, Short>, bassBoostStrength: Short, virtualizerStrength: Short, lyrics: String?, isFetchingLyrics: Boolean, userTier: Int, downloadState: DownloadState?, onLevelChange: (Int, Short) -> Unit, onBassBoostChange: (Short) -> Unit, onVirtualizerChange: (Short) -> Unit, onDownloadClick: () -> Unit, onCancelDownload: () -> Unit, onTogglePlay: () -> Unit, onSeek: (Long) -> Unit, onVolumeChange: (Float) -> Unit, onSkipNext: () -> Unit, onSkipPrevious: () -> Unit, onToggleShuffle: () -> Unit, onToggleRepeat: () -> Unit, onClose: () -> Unit, onToggleLike: () -> Unit, onOpenQueue: () -> Unit, onOpenSettings: () -> Unit, onAddToPlaylist: () -> Unit
 ) {
-    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val pagerState = rememberPagerState(pageCount = { 1 })
     val scope = rememberCoroutineScope()
+    
     BackHandler { onClose() }
-    var skipDirection by remember { mutableStateOf(0) }
+    
+    var skipDirection by remember { mutableIntStateOf(0) }
     val rippleAlpha = remember { Animatable(0f) }
     val rippleScale = remember { Animatable(0f) }
     var tapCount by remember { mutableIntStateOf(0) }
     var tapJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    
     val handleTap = {
         tapCount++
         tapJob?.cancel()
@@ -3253,9 +3340,9 @@ fun PlayerLandscape(
                 skipDirection = 1
                 scope.launch { 
                     rippleScale.snapTo(0f)
-                    rippleAlpha.snapTo(0.6f)
-                    launch { rippleScale.animateTo(1.5f, tween(300)) }
-                    launch { rippleAlpha.animateTo(0f, tween(300)) } 
+                    rippleAlpha.snapTo(0.4f)
+                    launch { rippleScale.animateTo(1.5f, tween(MotionMedium)) }
+                    launch { rippleAlpha.animateTo(0f, tween(MotionMedium)) } 
                 }
                 onSkipNext() 
             } else if (tapCount >= 3) { 
@@ -3263,43 +3350,46 @@ fun PlayerLandscape(
                 skipDirection = -1
                 scope.launch { 
                     rippleScale.snapTo(0f)
-                    rippleAlpha.snapTo(0.6f)
-                    launch { rippleScale.animateTo(1.5f, tween(300)) }
-                    launch { rippleAlpha.animateTo(0f, tween(300)) } 
+                    rippleAlpha.snapTo(0.4f)
+                    launch { rippleScale.animateTo(1.5f, tween(MotionMedium)) }
+                    launch { rippleAlpha.animateTo(0f, tween(MotionMedium)) } 
                 }
                 onSkipPrevious() 
             }
             tapCount = 0 
         }
     }
-    LaunchedEffect(mediaItem) { delay(500); skipDirection = 0 }
+
+    LaunchedEffect(mediaItem) { 
+        delay(MotionMedium.toLong())
+        skipDirection = 0 
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         // --- BACKGROUND ---
         AsyncImage(
             model = mediaItem.mediaMetadata.artworkUri,
             contentDescription = null,
-            modifier = Modifier
-                .fillMaxSize()
-                .blur(20.dp),
+            modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
-            alpha = 0.5f
+            alpha = 0.4f
         )
         
         Box(modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.65f)))
+            .background(Color.Black.copy(alpha = 0.7f)))
             
         val contentColor = Color.White
         
         Row(modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 32.dp, vertical = 16.dp),
+            .padding(horizontal = 40.dp, vertical = 24.dp),
             verticalAlignment = Alignment.CenterVertically) {
             
             // --- VERTICAL VOLUME (Left Side) ---
             Column(
                 modifier = Modifier
-                    .fillMaxHeight(0.7f)
+                    .fillMaxHeight()
                     .width(48.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween
@@ -3313,7 +3403,7 @@ fun PlayerLandscape(
                         onValueChange = onVolumeChange,
                         modifier = Modifier
                             .graphicsLayer { rotationZ = -90f }
-                            .width(160.dp),
+                            .width(180.dp),
                         colors = SliderDefaults.colors(thumbColor = contentColor, activeTrackColor = contentColor)
                     )
                 }
@@ -3322,48 +3412,49 @@ fun PlayerLandscape(
                 }
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(32.dp))
 
             // --- ARTWORK ---
             Box(modifier = Modifier
-                .fillMaxHeight(0.6f) 
-                .aspectRatio(1f)) {
+                .fillMaxHeight(0.85f) 
+                .aspectRatio(1f)
+                .graphicsLayer {
+                    shadowElevation = 40f
+                    shape = RoundedCornerShape(24.dp)
+                    clip = true
+                }) {
                  HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                     Box(modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer { cameraDistance = 8 * density }) {
-                        Box(modifier = Modifier
-                            .fillMaxSize()
-                            .clip(RoundedCornerShape(24.dp))
-                            .pointerInput(Unit) { detectTapGestures(onTap = { handleTap() }) }) {
-                            AnimatedContent(
-                                targetState = mediaItem.mediaId, 
-                                transitionSpec = { 
-                                    val enter = if (skipDirection == 1) {
-                                        slideInHorizontally(initialOffsetX = { (it * 0.1f).toInt() }) + fadeIn(tween(MotionMedium)) + scaleIn(initialScale = 0.92f, animationSpec = tween(MotionMedium))
-                                    } else if (skipDirection == -1) {
-                                        slideInHorizontally(initialOffsetX = { -(it * 0.1f).toInt() }) + fadeIn(tween(MotionMedium)) + scaleIn(initialScale = 0.92f, animationSpec = tween(MotionMedium))
-                                    } else {
-                                        fadeIn(tween(MotionLarge)) + scaleIn(initialScale = 0.96f, animationSpec = tween(MotionLarge))
-                                    }
-                                    val exit = if (skipDirection == 1) {
-                                        slideOutHorizontally(targetOffsetX = { -(it * 0.1f).toInt() }) + fadeOut(tween(MotionMedium)) + scaleOut(targetScale = 0.92f, animationSpec = tween(MotionMedium))
-                                    } else if (skipDirection == -1) {
-                                        slideOutHorizontally(targetOffsetX = { (it * 0.1f).toInt() }) + fadeOut(tween(MotionMedium)) + scaleOut(targetScale = 0.92f, animationSpec = tween(MotionMedium))
-                                    } else {
-                                        fadeOut(tween(MotionLarge)) + scaleOut(targetScale = 0.96f, animationSpec = tween(MotionLarge))
-                                    }
-                                    (enter togetherWith exit).using(SizeTransform(clip = false))
-                                }, 
-                                label = "ArtworkTransitionLandscape"
-                            ) { _ -> 
-                                FuturisticThumbnail(model = mediaItem.mediaMetadata.artworkUri, modifier = Modifier.fillMaxSize().graphicsLayer {
-                                    shadowElevation = 24f
-                                    shape = RoundedCornerShape(24.dp)
-                                    clip = true
-                                })
-                            }
-                            Canvas(modifier = Modifier.fillMaxSize()) { drawCircle(color = Color(0xFF00B29A).copy(alpha = rippleAlpha.value), radius = size.minDimension * rippleScale.value, center = center) }
+                        .pointerInput(Unit) { detectTapGestures(onTap = { handleTap() }) }) {
+                        AnimatedContent(
+                            targetState = mediaItem.mediaId, 
+                            transitionSpec = { 
+                                val enter = if (skipDirection == 1) {
+                                    slideInHorizontally(initialOffsetX = { (it * 0.2f).toInt() }) + fadeIn(tween(MotionMedium)) + scaleIn(initialScale = 0.95f, animationSpec = tween(MotionMedium))
+                                } else if (skipDirection == -1) {
+                                    slideInHorizontally(initialOffsetX = { -(it * 0.2f).toInt() }) + fadeIn(tween(MotionMedium)) + scaleIn(initialScale = 0.95f, animationSpec = tween(MotionMedium))
+                                } else {
+                                    fadeIn(tween(MotionLarge)) + scaleIn(initialScale = 0.96f, animationSpec = tween(MotionLarge))
+                                }
+                                val exit = if (skipDirection == 1) {
+                                    slideOutHorizontally(targetOffsetX = { -(it * 0.2f).toInt() }) + fadeOut(tween(MotionMedium)) + scaleOut(targetScale = 0.95f, animationSpec = tween(MotionMedium))
+                                } else if (skipDirection == -1) {
+                                    slideOutHorizontally(targetOffsetX = { (it * 0.2f).toInt() }) + fadeOut(tween(MotionMedium)) + scaleOut(targetScale = 0.95f, animationSpec = tween(MotionMedium))
+                                } else {
+                                    fadeOut(tween(MotionLarge)) + scaleOut(targetScale = 0.96f, animationSpec = tween(MotionLarge))
+                                }
+                                (enter togetherWith exit).using(SizeTransform(clip = false))
+                            }, 
+                            label = "ArtworkTransitionLandscape"
+                        ) { _ -> 
+                            FuturisticThumbnail(
+                                model = mediaItem.mediaMetadata.artworkUri, 
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        Canvas(modifier = Modifier.fillMaxSize()) { 
+                            drawCircle(color = Color(0xFF00E5FF).copy(alpha = rippleAlpha.value), radius = size.minDimension * rippleScale.value, center = center) 
                         }
                     }
                  }
@@ -3372,17 +3463,26 @@ fun PlayerLandscape(
             Spacer(modifier = Modifier.width(48.dp))
             
             // --- INFO & CONTROLS ---
-            Column(modifier = Modifier.weight(1.5f), verticalArrangement = Arrangement.Center) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onClose() }) { 
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = contentColor) 
+                    AnimatedIconButton(onClick = { onClose() }) { 
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close player", tint = contentColor, modifier = Modifier.size(32.dp)) 
                     }
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) { 
-                        Text("NOW PLAYING", color = contentColor.copy(alpha = 0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp) 
+                        Text(
+                            text = "NOW PLAYING", 
+                            color = contentColor.copy(alpha = 0.6f), 
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
+                        ) 
                     }
                     
                     AnimatedIconButton(onClick = { onToggleLike() }) { 
-                         Icon(if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, contentDescription = null, tint = if (isLiked) Color.Red else contentColor, modifier = Modifier.size(28.dp)) 
+                         Icon(
+                             imageVector = if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, 
+                             contentDescription = "Like song", 
+                             tint = if (isLiked) Color.Red else contentColor, 
+                             modifier = Modifier.size(28.dp)
+                         ) 
                     }
 
                     var showMoreMenu by remember { mutableStateOf(false) }
@@ -3408,57 +3508,80 @@ fun PlayerLandscape(
                     }
 
                     AnimatedIconButton(onClick = { onOpenQueue() }) {
-                        Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null, tint = contentColor) 
+                        Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "Open queue", tint = contentColor, modifier = Modifier.size(32.dp)) 
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 
                 Column {
-                    Text(
-                        text = mediaItem.mediaMetadata.title?.toString() ?: "Unknown", 
-                        color = contentColor, 
-                        fontSize = 22.sp, 
-                        fontWeight = FontWeight.ExtraBold, 
-                        maxLines = 1, 
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .basicMarquee() 
-                    )
-                    Text(
-                        text = mediaItem.mediaMetadata.artist?.toString() ?: "Unknown", 
-                        color = contentColor.copy(alpha = 0.6f), 
-                        fontSize = 16.sp, 
-                        fontWeight = FontWeight.Medium, 
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    AnimatedContent(
+                        targetState = mediaItem.mediaMetadata.title?.toString() ?: "Unknown",
+                        transitionSpec = { fadeIn(tween(MotionMedium)) + slideInVertically { it / 2 } togetherWith fadeOut(tween(MotionMedium)) },
+                        label = "TitleAnimationLandscape"
+                    ) { title ->
+                        Text(
+                            text = title, 
+                            color = contentColor, 
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
+                            maxLines = 1, 
+                            modifier = Modifier.fillMaxWidth().basicMarquee() 
+                        )
+                    }
+                    AnimatedContent(
+                        targetState = mediaItem.mediaMetadata.artist?.toString() ?: "Unknown",
+                        transitionSpec = { fadeIn(tween(MotionMedium, delayMillis = 50)) + slideInVertically { it / 2 } togetherWith fadeOut(tween(MotionMedium)) },
+                        label = "ArtistAnimationLandscape"
+                    ) { artist ->
+                        Text(
+                            text = artist, 
+                            color = contentColor.copy(alpha = 0.7f), 
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(32.dp))
                 
                 // --- SEEK BAR ---
                 Slider(
                     value = if (duration > 0) currentPosition.toFloat() / duration.toFloat() else 0f, 
                     onValueChange = { onSeek((it * duration).toLong()) }, 
-                    colors = SliderDefaults.colors(thumbColor = contentColor, activeTrackColor = contentColor)
+                    colors = SliderDefaults.colors(thumbColor = contentColor, activeTrackColor = contentColor, inactiveTrackColor = contentColor.copy(alpha = 0.2f))
                 )
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) { 
-                    Text(formatTime(currentPosition), color = contentColor.copy(alpha = 0.5f), fontSize = 11.sp)
-                    Text(formatTime(duration), color = contentColor.copy(alpha = 0.5f), fontSize = 11.sp) 
+                    Text(formatTime(currentPosition), color = contentColor.copy(alpha = 0.6f), style = MaterialTheme.typography.labelSmall)
+                    Text(formatTime(duration), color = contentColor.copy(alpha = 0.6f), style = MaterialTheme.typography.labelSmall) 
                 }
                 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 
                 // --- CONTROLS ---
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    AnimatedIconButton(onClick = { onToggleShuffle() }) { Icon(Icons.Default.Shuffle, contentDescription = null, tint = if (shuffleModeEnabled) MaterialTheme.colorScheme.primary else contentColor) }
-                    AnimatedIconButton(onClick = { onSkipPrevious() }) { Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = contentColor, modifier = Modifier.size(44.dp)) }
+                    AnimatedIconButton(onClick = { onToggleShuffle() }) { 
+                        Icon(Icons.Default.Shuffle, contentDescription = null, tint = if (shuffleModeEnabled) MaterialTheme.colorScheme.primary else contentColor.copy(alpha = 0.8f)) 
+                    }
+                    AnimatedIconButton(onClick = { onSkipPrevious() }) { 
+                        Icon(Icons.Default.SkipPrevious, contentDescription = null, tint = contentColor, modifier = Modifier.size(44.dp)) 
+                    }
                     
                     PlayPauseMorph(isPlaying, isBuffering, isLandscape = true, onClick = { onTogglePlay() } )
                     
-                    AnimatedIconButton(onClick = { onSkipNext() }) { Icon(Icons.Default.SkipNext, contentDescription = null, tint = contentColor, modifier = Modifier.size(44.dp)) }
-                    AnimatedIconButton(onClick = { onToggleRepeat() }) { Icon(when (repeatMode) { Player.REPEAT_MODE_ONE -> Icons.Default.RepeatOne; else -> Icons.Default.Repeat }, contentDescription = null, tint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else contentColor) }
+                    AnimatedIconButton(onClick = { onSkipNext() }) { 
+                        Icon(Icons.Default.SkipNext, contentDescription = null, tint = contentColor, modifier = Modifier.size(44.dp)) 
+                    }
+                    AnimatedIconButton(onClick = { onToggleRepeat() }) { 
+                        Icon(
+                            imageVector = when (repeatMode) { 
+                                Player.REPEAT_MODE_ONE -> Icons.Default.RepeatOne
+                                else -> Icons.Default.Repeat 
+                            }, 
+                            contentDescription = null, 
+                            tint = if (repeatMode != Player.REPEAT_MODE_OFF) MaterialTheme.colorScheme.primary else contentColor.copy(alpha = 0.8f)
+                        ) 
+                    }
                 }
             }
         }
@@ -3577,9 +3700,22 @@ fun PlayPauseMorph(isPlaying: Boolean, isBuffering: Boolean, isLandscape: Boolea
     val size = if (isLandscape) 64.dp else 84.dp
     val iconSize = if (isLandscape) 40.dp else 52.dp
     
+    val pulseScale by animateFloatAsState(
+        targetValue = if (isPlaying && !isBuffering) 1.05f else 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
     Surface(
         modifier = Modifier
             .size(size)
+            .graphicsLayer(
+                scaleX = if (isPlaying && !isBuffering) pulseScale else 1f,
+                scaleY = if (isPlaying && !isBuffering) pulseScale else 1f
+            )
             .clip(CircleShape)
             .clickable(
                 onClick = { 

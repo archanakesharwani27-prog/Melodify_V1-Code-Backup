@@ -7,9 +7,28 @@ import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.stream.StreamInfo
 import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import android.text.Html
+import android.util.LruCache
 import androidx.core.text.HtmlCompat
 
 object YouTubeExtractor {
+    private val urlCache = LruCache<String, CachedUrl>(50)
+
+    private data class CachedUrl(val url: String, val timestamp: Long)
+
+    private fun getCachedUrl(videoId: String): String? {
+        val cached = urlCache.get(videoId) ?: return null
+        // YouTube URLs usually expire in 6 hours, we use 5 hours to be safe (5 * 60 * 60 * 1000)
+        return if (System.currentTimeMillis() - cached.timestamp < 18000000) {
+            cached.url
+        } else {
+            urlCache.remove(videoId)
+            null
+        }
+    }
+
+    private fun cacheUrl(videoId: String, url: String) {
+        urlCache.put(videoId, CachedUrl(url, System.currentTimeMillis()))
+    }
 
     private fun decodeHtml(text: String): String {
         return HtmlCompat.fromHtml(text, HtmlCompat.FROM_HTML_MODE_LEGACY).toString()
@@ -42,6 +61,11 @@ object YouTubeExtractor {
 
     suspend fun getAudioUrl(videoId: String, quality: String = "Medium"): String? = withContext(Dispatchers.IO) {
         try {
+            getCachedUrl(videoId)?.let { 
+                android.util.Log.d("YouTubeExtractor", "Using cached URL for $videoId")
+                return@withContext it 
+            }
+
             val useFallback = DynamicCipherManager.getRule("use_fallback_extractor") == "true"
             if (useFallback) {
                 // Potential fallback logic using a remote API if library breaks
@@ -70,6 +94,7 @@ object YouTubeExtractor {
             
             if (audioStream != null) {
                 android.util.Log.d("YouTubeExtractor", "Found audio stream: ${audioStream.url}")
+                audioStream.url?.let { cacheUrl(videoId, it) }
                 return@withContext audioStream.url
             }
 
@@ -78,6 +103,7 @@ object YouTubeExtractor {
                 .minByOrNull { it.bitrate }
             
             android.util.Log.d("YouTubeExtractor", "Using muxed stream fallback: ${muxedStream?.url}")
+            muxedStream?.url?.let { cacheUrl(videoId, it) }
             return@withContext muxedStream?.url
         } catch (e: Throwable) {
             android.util.Log.e("YouTubeExtractor", "Fatal error in getAudioUrl for $videoId", e)

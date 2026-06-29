@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.C
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.core.content.ContextCompat
@@ -110,8 +111,32 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _audioQuality = MutableStateFlow(sharedPrefs.getString("audio_quality", "Medium") ?: "Medium")
     val audioQuality: StateFlow<String> = _audioQuality
 
+    private val _crossfadeDuration = MutableStateFlow(sharedPrefs.getLong("crossfade_duration", 0L))
+    val crossfadeDuration: StateFlow<Long> = _crossfadeDuration
+
     init {
+        restorePlaybackState()
         startProgressUpdate()
+        
+        viewModelScope.launch {
+            currentQueue.collect {
+                saveQueueState()
+            }
+        }
+        viewModelScope.launch {
+            currentIndex.collect {
+                saveQueueState()
+            }
+        }
+    }
+
+    private fun saveQueueState() {
+        val statePrefs = getApplication<Application>().getSharedPreferences("playback_state", Context.MODE_PRIVATE)
+        statePrefs.edit().apply {
+            putString("queue_json", queueManager.serialize())
+            putInt("queue_index", queueManager.getCurrentIndex())
+            apply()
+        }
     }
 
     fun resetPlayer() {
@@ -129,6 +154,55 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         urlCache.clear() // Clear cache to fetch new quality next time
     }
 
+    @UnstableApi
+    fun setCrossfadeDuration(durationMs: Long) {
+        _crossfadeDuration.value = durationMs
+        sharedPrefs.edit().putLong("crossfade_duration", durationMs).apply()
+        _controller?.let { controller ->
+            val args = Bundle().apply {
+                putLong("duration", durationMs)
+            }
+            controller.sendCustomCommand(SessionCommand("SET_CROSSFADE", Bundle.EMPTY), args)
+        }
+    }
+
+    private fun restorePlaybackState() {
+        val statePrefs = getApplication<Application>().getSharedPreferences("playback_state", Context.MODE_PRIVATE)
+        val lastMediaId = statePrefs.getString("last_media_id", null) ?: return
+        
+        val title = statePrefs.getString("last_title", "Unknown") ?: "Unknown"
+        val artist = statePrefs.getString("last_artist", "Unknown") ?: "Unknown"
+        val artwork = statePrefs.getString("last_artwork", "") ?: ""
+        val position = statePrefs.getLong("last_position", 0L)
+        val shuffle = statePrefs.getBoolean("shuffle_enabled", false)
+        val repeat = statePrefs.getInt("repeat_mode", Player.REPEAT_MODE_OFF)
+        val queueJson = statePrefs.getString("queue_json", null)
+        val queueIndex = statePrefs.getInt("queue_index", -1)
+
+        queueJson?.let {
+            queueManager.deserialize(it, queueIndex)
+        }
+
+        val metadata = androidx.media3.common.MediaMetadata.Builder()
+            .setTitle(title)
+            .setArtist(artist)
+            .setArtworkUri(android.net.Uri.parse(artwork))
+            .build()
+        
+        val restoredItem = MediaItem.Builder()
+            .setMediaId(lastMediaId)
+            .setMediaMetadata(metadata)
+            .build()
+        
+        _currentMediaItem.value = restoredItem
+        _currentPosition.value = position
+        _shuffleModeEnabled.value = shuffle
+        _repeatMode.value = repeat
+        
+        // We don't auto-play on restore, just set the metadata so it shows in UI
+        android.util.Log.d("MusicViewModel", "Restored playback state: $title")
+    }
+
     fun initController(context: Context) {
         if (controllerFuture != null) {
              android.util.Log.d("MusicViewModel", "initController: Future already exists")
@@ -144,12 +218,18 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     _controller = controller
                     _volume.value = controller.volume
                     android.util.Log.d("MusicViewModel", "MediaController connected successfully. Session: ${controller.connectedToken}")
-                    _isPlaying.value = controller.isPlaying
-                    // Only update currentMediaItem from controller if we aren't already trying to play something
-                    if (_currentMediaItem.value == null) {
+                    
+                    // Priority: 1. Controller's active item, 2. Restored item
+                    if (controller.currentMediaItem != null) {
                         _currentMediaItem.value = controller.currentMediaItem
+                        _isPlaying.value = controller.isPlaying
+                        _duration.value = controller.duration.coerceAtLeast(0L)
+                        _currentPosition.value = controller.currentPosition
+                    } else {
+                        // If controller is empty, we don't clear the restored state
+                        // but we also don't play yet.
                     }
-                    _duration.value = controller.duration.coerceAtLeast(0L)
+
                     _isBuffering.value = controller.playbackState == Player.STATE_BUFFERING
                     _shuffleModeEnabled.value = controller.shuffleModeEnabled
                     _repeatMode.value = controller.repeatMode
@@ -186,6 +266,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                                 val indexInQueue = queue.indexOfFirst { it.id == item.mediaId }
                                 if (indexInQueue != -1 && indexInQueue != queueManager.getCurrentIndex()) {
                                     queueManager.setCurrentIndex(indexInQueue)
+                                    // Update controller with even more upcoming items for continuous gapless
+                                    updateControllerQueue(controller, indexInQueue)
                                 }
                             }
                         }
@@ -419,8 +501,26 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 controller.pause()
                 _isPlaying.value = false
             } else {
-                controller.play()
-                _isPlaying.value = true
+                if (controller.mediaItemCount == 0 && _currentMediaItem.value != null) {
+                    // Restored item case
+                    val restoredItem = _currentMediaItem.value!!
+                    val position = _currentPosition.value
+                    playSong(
+                        videoId = restoredItem.mediaId,
+                        title = restoredItem.mediaMetadata.title?.toString() ?: "Unknown",
+                        artist = restoredItem.mediaMetadata.artist?.toString() ?: "Unknown",
+                        artworkUrl = restoredItem.mediaMetadata.artworkUri?.toString() ?: ""
+                    )
+                    // Wait for prepare and seek? playSong already does prepare/play.
+                    // I should probably add seek to playSong or handle it here.
+                    viewModelScope.launch {
+                        delay(500)
+                        seekTo(position)
+                    }
+                } else {
+                    controller.play()
+                    _isPlaying.value = true
+                }
             }
         }
     }
@@ -440,20 +540,42 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun skipNext(userTier: Int = 0) {
+        val controller = _controller ?: return
         val nextTrack = queueManager.getNextTrack()
+        
         if (nextTrack != null) {
+            // Check if controller already has this item as next
+            val nextIndex = controller.nextMediaItemIndex
+            if (nextIndex != C.INDEX_UNSET) {
+                val nextItem = controller.getMediaItemAt(nextIndex)
+                if (nextItem.mediaId == nextTrack.id) {
+                    controller.seekToNext()
+                    return
+                }
+            }
             playSong(nextTrack.id, nextTrack.title, nextTrack.artist, nextTrack.thumbnailUrl, userTier = userTier)
         } else {
-             _controller?.seekToNext()
+             controller.seekToNext()
         }
     }
 
     fun skipPrevious(userTier: Int = 0) {
+        val controller = _controller ?: return
         val prevTrack = queueManager.getPreviousTrack()
+        
         if (prevTrack != null) {
+            // Check if controller already has this item as previous
+            val prevIndex = controller.previousMediaItemIndex
+            if (prevIndex != C.INDEX_UNSET) {
+                val prevItem = controller.getMediaItemAt(prevIndex)
+                if (prevItem.mediaId == prevTrack.id) {
+                    controller.seekToPrevious()
+                    return
+                }
+            }
             playSong(prevTrack.id, prevTrack.title, prevTrack.artist, prevTrack.thumbnailUrl, userTier = userTier)
         } else {
-            _controller?.seekToPrevious()
+            controller.seekToPrevious()
         }
     }
 
@@ -647,7 +769,34 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    override fun onCleared() {
+    private fun updateControllerQueue(controller: MediaController, currentIndex: Int) {
+        val queue = queueManager.queue.value
+        if (currentIndex >= queue.size - 1) return
+        
+        val nextTrack = queue[currentIndex + 1]
+        // Check if already in controller queue
+        var alreadyQueued = false
+        for (i in 0 until controller.mediaItemCount) {
+            if (controller.getMediaItemAt(i).mediaId == nextTrack.id) {
+                alreadyQueued = true
+                break
+            }
+        }
+        
+        if (!alreadyQueued) {
+            val nextItem = MediaItem.Builder()
+                .setMediaId(nextTrack.id)
+                .setMediaMetadata(androidx.media3.common.MediaMetadata.Builder()
+                    .setTitle(nextTrack.title)
+                    .setArtist(nextTrack.artist)
+                    .setArtworkUri(android.net.Uri.parse(nextTrack.thumbnailUrl))
+                    .setExtras(Bundle().apply { putString("quality", _audioQuality.value) })
+                    .build())
+                .build()
+            controller.addMediaItem(nextItem)
+        }
+    }
+        override fun onCleared() {
         super.onCleared()
         controllerFuture?.let {
             MediaController.releaseFuture(it)

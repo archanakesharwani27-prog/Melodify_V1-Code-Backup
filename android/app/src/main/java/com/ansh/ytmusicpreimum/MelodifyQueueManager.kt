@@ -3,6 +3,8 @@ package com.ansh.ytmusicpreimum
 import com.ansh.ytmusicpreimum.data.TrackEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MelodifyQueueManager {
     private val _queue = MutableStateFlow<List<TrackEntity>>(emptyList())
@@ -10,6 +12,40 @@ class MelodifyQueueManager {
 
     private val _currentIndex = MutableStateFlow(-1)
     val currentIndex = _currentIndex.asStateFlow()
+
+    fun serialize(): String {
+        val array = JSONArray()
+        _queue.value.forEach { track ->
+            val obj = JSONObject().apply {
+                put("id", track.id)
+                put("title", track.title)
+                put("artist", track.artist)
+                put("thumbnailUrl", track.thumbnailUrl)
+            }
+            array.put(obj)
+        }
+        return array.toString()
+    }
+
+    fun deserialize(json: String, index: Int) {
+        try {
+            val array = JSONArray(json)
+            val list = mutableListOf<TrackEntity>()
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                list.add(TrackEntity(
+                    id = obj.getString("id"),
+                    title = obj.getString("title"),
+                    artist = obj.getString("artist"),
+                    thumbnailUrl = obj.getString("thumbnailUrl")
+                ))
+            }
+            _queue.value = list
+            _currentIndex.value = index
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
     fun setQueue(tracks: List<TrackEntity>, startId: String? = null) {
         _queue.value = tracks

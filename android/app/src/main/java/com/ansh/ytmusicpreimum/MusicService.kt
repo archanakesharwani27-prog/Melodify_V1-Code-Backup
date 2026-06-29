@@ -40,19 +40,22 @@ class MusicService : MediaSessionService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var fadeJob: Job? = null
-    private var crossfadeEnabled = true 
+    private var crossfadeDurationMs = 0L // 0 means disabled
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
         
+        val sharedPrefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
+        crossfadeDurationMs = sharedPrefs.getLong("crossfade_duration", 0L)
+
         exoPlayer = ExoPlayer.Builder(this)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .setUsage(C.USAGE_MEDIA)
                     .build(),
-                true
+                true // Handle Audio Focus automatically
             )
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
@@ -65,8 +68,27 @@ class MusicService : MediaSessionService() {
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) {
-                    fadeIn(2000)
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) {
+                    if (crossfadeDurationMs > 0) {
+                        fadeIn(crossfadeDurationMs)
+                    } else {
+                        exoPlayer.volume = 1.0f
+                    }
+                }
+                savePlaybackState()
+            }
+            
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int
+            ) {
+                savePlaybackState()
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING) {
+                    savePlaybackState()
                 }
             }
             
@@ -181,6 +203,13 @@ class MusicService : MediaSessionService() {
                         virtualizer?.setStrength(strength)
                         return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                     }
+                    "SET_CROSSFADE" -> {
+                        val duration = args.getLong("duration")
+                        crossfadeDurationMs = duration
+                        getSharedPreferences("settings", Context.MODE_PRIVATE).edit()
+                            .putLong("crossfade_duration", duration).apply()
+                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                    }
                 }
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
             }
@@ -189,6 +218,22 @@ class MusicService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, exoPlayer)
             .setCallback(callback)
             .build()
+    }
+
+    private fun savePlaybackState() {
+        val currentItem = exoPlayer.currentMediaItem ?: return
+        val sharedPrefs = getSharedPreferences("playback_state", Context.MODE_PRIVATE)
+        sharedPrefs.edit().apply {
+            putString("last_media_id", currentItem.mediaId)
+            putLong("last_position", exoPlayer.currentPosition)
+            putBoolean("shuffle_enabled", exoPlayer.shuffleModeEnabled)
+            putInt("repeat_mode", exoPlayer.repeatMode)
+            // Save basic metadata for fast restore in UI before service resolves URL
+            putString("last_title", currentItem.mediaMetadata.title?.toString())
+            putString("last_artist", currentItem.mediaMetadata.artist?.toString())
+            putString("last_artwork", currentItem.mediaMetadata.artworkUri?.toString())
+            apply()
+        }
     }
 
     private fun initVisualizer(audioSessionId: Int) {
@@ -278,12 +323,14 @@ class MusicService : MediaSessionService() {
         serviceScope.launch {
             while (isActive) {
                 delay(500)
-                if (exoPlayer.isPlaying && crossfadeEnabled) {
+                if (exoPlayer.isPlaying && crossfadeDurationMs > 0) {
                     val duration = exoPlayer.duration
                     val position = exoPlayer.currentPosition
-                    if (duration > 0 && (duration - position) <= 3500) { 
-                        fadeOut(3000)
-                        delay(4000)
+                    if (duration > 0 && (duration - position) <= crossfadeDurationMs) { 
+                        fadeOut(crossfadeDurationMs)
+                        // Note: Media3 will automatically transition to the next item
+                        // when the current one ends. The fadeIn will be triggered in onMediaItemTransition.
+                        delay(crossfadeDurationMs + 500)
                     }
                 }
             }
@@ -291,6 +338,10 @@ class MusicService : MediaSessionService() {
     }
 
     private fun fadeIn(durationMs: Long) {
+        if (durationMs <= 0) {
+            exoPlayer.volume = 1.0f
+            return
+        }
         fadeJob?.cancel()
         fadeJob = serviceScope.launch {
             val steps = 20
@@ -305,6 +356,11 @@ class MusicService : MediaSessionService() {
     }
 
     private fun fadeOut(durationMs: Long, onEnd: () -> Unit = {}) {
+        if (durationMs <= 0) {
+            exoPlayer.volume = 0f
+            onEnd()
+            return
+        }
         fadeJob?.cancel()
         fadeJob = serviceScope.launch {
             val steps = 20
