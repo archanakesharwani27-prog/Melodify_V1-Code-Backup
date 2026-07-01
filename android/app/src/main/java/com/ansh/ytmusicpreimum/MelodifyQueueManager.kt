@@ -134,6 +134,11 @@ class MelodifyQueueManager {
         return null
     }
     
+    fun clearQueue() {
+        _queue.value = emptyList()
+        _currentIndex.value = -1
+    }
+
     fun getCurrentIndex() = _currentIndex.value
     fun setCurrentIndex(index: Int) {
         _currentIndex.value = index

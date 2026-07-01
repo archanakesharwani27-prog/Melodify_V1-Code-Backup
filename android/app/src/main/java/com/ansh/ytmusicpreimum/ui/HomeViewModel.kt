@@ -38,6 +38,9 @@ class HomeViewModel : ViewModel() {
     private val _globalHits = MutableStateFlow<List<Pair<String, List<TrackEntity>>>>(emptyList())
     val globalHits: StateFlow<List<Pair<String, List<TrackEntity>>>> = _globalHits
 
+    private val _curatedSections = MutableStateFlow<List<Pair<String, List<TrackEntity>>>>(emptyList())
+    val curatedSections: StateFlow<List<Pair<String, List<TrackEntity>>>> = _curatedSections
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
@@ -131,6 +134,19 @@ class HomeViewModel : ViewModel() {
                     // Load remaining sections...
                     val topIndia = YouTubeExtractor.search("Top 50 Songs India")
                     _globalHits.value = listOf("Top India" to (repository?.enrichTracks(topIndia) ?: topIndia))
+
+                    // Curated Sections for Flagship Polish
+                    val curatedQueries = listOf(
+                        "Coke Studio Bharat Hits",
+                        "Indie Hindi Gems 2024",
+                        "Bollywood Lo-fi Mashup 1 hour"
+                    )
+                    val curatedResults = curatedQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
+                    _curatedSections.value = listOf(
+                        "Melodify Picks" to (repository?.enrichTracks(curatedResults[0]) ?: curatedResults[0]),
+                        "Hidden Gems" to (repository?.enrichTracks(curatedResults[1]) ?: curatedResults[1]),
+                        "Editor's Choice" to (repository?.enrichTracks(curatedResults[2]) ?: curatedResults[2])
+                    )
                 }
 
             } catch (e: Exception) {

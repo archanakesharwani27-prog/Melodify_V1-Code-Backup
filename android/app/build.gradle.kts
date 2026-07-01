@@ -21,8 +21,8 @@ android {
         applicationId = "com.melodify.melodifyapp"
         minSdk = 24
         targetSdk = 35
-        versionCode = 3
-        versionName = "2.0.0-dev2"
+        versionCode = 5
+        versionName = "2.0.0-dev4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

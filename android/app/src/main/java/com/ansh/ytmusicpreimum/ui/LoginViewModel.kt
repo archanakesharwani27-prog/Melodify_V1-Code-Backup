@@ -29,8 +29,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoggedIn = MutableStateFlow(sharedPrefs.getBoolean("is_logged_in", false))
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn
 
-    // 0: Free, 2: Pro (Tier 1 Decent removed)
-    private val _userTier = MutableStateFlow(sharedPrefs.getInt("user_tier", 0))
+    // All users are PRO by default now
+    private val _userTier = MutableStateFlow(2)
     val userTier: StateFlow<Int> = _userTier
 
     // Freemium Limits
@@ -107,69 +107,28 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun canDownload(): Boolean {
-        checkAndResetLimits()
-        if (_userTier.value < 2) return false // Strictly PRO only
-        
-        val limit = when(_subMonths.value) {
-            1 -> 2
-            6 -> 10
-            12 -> 20
-            else -> 0
-        }
-        return _dailyDownloadsUsed.value < limit
+        return true
     }
 
     fun useDownload(): Boolean {
-        if (!canDownload()) return false
-        if (_userTier.value == 0) {
-            _freeDownloadsLeft.value -= 1
-            sharedPrefs.edit().putInt("free_downloads", _freeDownloadsLeft.value).apply()
-        } else if (_userTier.value == 2) {
-            _dailyDownloadsUsed.value += 1
-            sharedPrefs.edit().putInt("daily_downloads_used", _dailyDownloadsUsed.value).apply()
-        }
         return true
     }
 
     fun isBackgroundPlaybackAllowed(): Boolean {
-        return _userTier.value >= 2
+        // Requirement: Gmail (or any authenticated) login required for background playback
+        return _isLoggedIn.value && !isGuestUser
     }
 
     fun canUse8D(): Boolean {
-        if (_userTier.value >= 2) return true
-        if (_eightDCount.value < 2) {
-            _eightDCount.value += 1
-            sharedPrefs.edit().putInt("eight_d_count", _eightDCount.value).apply()
-            return true
-        }
-        return false
+        return true
     }
 
     fun canCacheLyrics(): Boolean {
-        if (_userTier.value >= 2) return true
-        if (_lyricsCount.value < 10) {
-            _lyricsCount.value += 1
-            sharedPrefs.edit().putInt("lyrics_count", _lyricsCount.value).apply()
-            return true
-        }
-        return false
+        return true
     }
 
     fun upgradeTier(tier: Int, months: Int) {
-        val now = System.currentTimeMillis()
-        _userTier.value = tier
-        _subMonths.value = months
-        _subDate.value = now
-        
-        sharedPrefs.edit().apply {
-            putInt("user_tier", tier)
-            putInt("sub_months", months)
-            putLong("sub_date", now)
-            apply()
-        }
-        
-        val planName = if(tier == 2) "PRO ($months Months)" else "FREE"
-        Toast.makeText(getApplication(), "Upgraded to $planName!", Toast.LENGTH_LONG).show()
+        // No-op: Everyone is PRO
     }
 
     fun shouldShowNameIntro(): Boolean {
@@ -193,10 +152,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         _userName.value = name
         _userEmail.value = email
         _userPhotoUrl.value = photoUrl
-        
-        if (email == "archanakesharwani27@gmail.com" || email == "anshkesharwani0807@gmail.com") {
-            upgradeTier(2, 12)
-        }
     }
 
     private fun saveUserToPrefs(name: String?, email: String?, photoUrl: String?) {
@@ -228,7 +183,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             sharedPrefs.edit().clear().apply()
             
             _isLoggedIn.value = false
-            _userTier.value = 0
+            _userTier.value = 2 // Keep PRO even on logout
             _subMonths.value = 0
             _userName.value = ""
             _userEmail.value = ""

@@ -11,10 +11,14 @@ data class TrackEntity(
     @PrimaryKey val id: String = "",
     val title: String = "",
     val artist: String = "",
+    val album: String = "Unknown Album",
     val thumbnailUrl: String = "",
     val isLiked: Boolean = false,
     val isDownloaded: Boolean = false,
-    val localFilePath: String? = null
+    val localFilePath: String? = null,
+    val playCount: Int = 0,
+    val lastPlayed: Long = 0,
+    val addedDate: Long = System.currentTimeMillis()
 )
 
 @Entity(tableName = "playlists")
@@ -28,7 +32,8 @@ data class PlaylistEntity(
 @Entity(tableName = "playlist_track_cross_ref", primaryKeys = ["playlistId", "trackId"])
 data class PlaylistTrackCrossRef(
     val playlistId: Long = 0,
-    val trackId: String = ""
+    val trackId: String = "",
+    val position: Int = 0
 )
 
 @Entity(tableName = "playback_history")
@@ -52,6 +57,33 @@ data class StreamCacheEntity(
     val streamUrl: String,
     val expiryTime: Long,
     val quality: String
+)
+
+@Entity(tableName = "queue")
+data class QueueEntity(
+    @PrimaryKey val trackId: String = "",
+    val title: String = "",
+    val artist: String = "",
+    val thumbnailUrl: String = "",
+    val position: Int = 0
+)
+
+@Entity(tableName = "lyrics_cache")
+data class LyricsEntity(
+    @PrimaryKey val videoId: String,
+    val lyrics: String,
+    val isSynced: Boolean,
+    val expiryTime: Long
+)
+
+@Entity(tableName = "equalizer_presets")
+data class EqualizerPresetEntity(
+    @PrimaryKey val name: String,
+    val bandLevels: String, // Comma separated shorts
+    val bassBoost: Short,
+    val virtualizer: Short,
+    val loudness: Int,
+    val isCustom: Boolean = true
 )
 
 data class PlaylistWithTracks(

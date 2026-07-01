@@ -96,17 +96,13 @@ object YouTubeExtractor {
     suspend fun getAudioUrl(videoId: String, quality: String = "Medium"): String? = withContext(Dispatchers.IO) {
         val existingJob = mutex.withLock { activeJobs[videoId] }
         if (existingJob != null) {
-            android.util.Log.d("PlaybackProfile", "YouTubeExtractor: Joining existing job for $videoId")
             return@withContext existingJob.await()
         }
 
         val job = async {
             for (attempt in 1..2) {
-                val startTime = System.currentTimeMillis()
-                android.util.Log.d("PlaybackProfile", "YouTubeExtractor Start: $videoId (Attempt $attempt)")
                 try {
                     getCachedUrl(videoId, quality)?.let { 
-                        android.util.Log.d("PlaybackProfile", "YouTubeExtractor End (Cache Hit): +${System.currentTimeMillis() - startTime}ms")
                         return@async it 
                     }
 
@@ -115,7 +111,6 @@ object YouTubeExtractor {
                         return@async getAudioUrlFromFallback(videoId)
                     }
 
-                    android.util.Log.d("YouTubeExtractor", "Fetching stream info for videoId: $videoId with quality: $quality")
                     val service = ServiceList.YouTube
                     val url = "https://www.youtube.com/watch?v=$videoId"
                     
@@ -135,7 +130,6 @@ object YouTubeExtractor {
                     } ?: streamInfo.audioStreams.minByOrNull { it.bitrate }
                     
                     if (audioStream != null) {
-                        android.util.Log.d("PlaybackProfile", "YouTubeExtractor End (Success): +${System.currentTimeMillis() - startTime}ms")
                         audioStream.url?.let { cacheUrl(videoId, it, quality) }
                         return@async audioStream.url
                     }
@@ -144,12 +138,11 @@ object YouTubeExtractor {
                         .filter { it.isVideoOnly.not() }
                         .minByOrNull { it.bitrate }
                     
-                    android.util.Log.d("PlaybackProfile", "YouTubeExtractor End (Muxed Fallback): +${System.currentTimeMillis() - startTime}ms")
                     muxedStream?.url?.let { cacheUrl(videoId, it, quality) }
                     return@async muxedStream?.url
                 } catch (e: Throwable) {
-                    android.util.Log.e("YouTubeExtractor", "Attempt $attempt failed for $videoId", e)
                     if (attempt == 2) {
+                        android.util.Log.e("YouTubeExtractor", "Failed to extract $videoId", e)
                         return@async getAudioUrlFromFallback(videoId)
                     }
                     delay(300) // Small delay before retry

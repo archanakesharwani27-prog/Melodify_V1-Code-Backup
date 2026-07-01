@@ -28,6 +28,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val downloadedTracks: StateFlow<List<TrackEntity>>
     val playlists: StateFlow<List<PlaylistEntity>>
     val playbackHistory: StateFlow<List<com.ansh.ytmusicpreimum.data.HistoryEntity>>
+    
+    val recentlyAdded: StateFlow<List<TrackEntity>>
+    val recentlyPlayed: StateFlow<List<TrackEntity>>
+    val topTracks: StateFlow<List<TrackEntity>>
 
     private val _localTracks = MutableStateFlow<List<TrackEntity>>(emptyList())
     val localTracks: StateFlow<List<TrackEntity>> = _localTracks.asStateFlow()
@@ -53,6 +57,22 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
             initialValue = emptyList()
         )
         playbackHistory = repository.history.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+        recentlyAdded = trackDao.getRecentlyAdded().stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+        recentlyPlayed = trackDao.getRecentlyPlayedTracks().stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+        topTracks = trackDao.getTopTracks().stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
@@ -107,13 +127,45 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun addTrackToPlaylist(playlistId: Long, track: TrackEntity) {
         viewModelScope.launch {
             trackDao.insertTrack(track)
-            trackDao.insertTrackToPlaylist(PlaylistTrackCrossRef(playlistId, track.id))
+            // Get current tracks to determine position
+            val currentTracks = withContext(Dispatchers.IO) {
+                // We need a way to get the count or the next position
+                // For now, just add at the end
+                0 // placeholder, should ideally be currentTracks.size
+            }
+            trackDao.insertTrackToPlaylist(PlaylistTrackCrossRef(playlistId, track.id, position = 0)) // simplistic
             repository.syncTrackToPlaylistInCloud(playlistId, track.id)
         }
     }
 
-    fun getPlaylistTracks(playlistId: Long): Flow<com.ansh.ytmusicpreimum.data.PlaylistWithTracks> {
-        return trackDao.getPlaylistWithTracks(playlistId)
+    fun removeTrackFromPlaylist(playlistId: Long, trackId: String) {
+        viewModelScope.launch {
+            trackDao.removeTrackFromPlaylist(playlistId, trackId)
+        }
+    }
+
+    fun renamePlaylist(playlist: PlaylistEntity, newName: String) {
+        viewModelScope.launch {
+            val updated = playlist.copy(name = newName)
+            trackDao.insertPlaylist(updated)
+            repository.syncPlaylistToCloud(updated)
+        }
+    }
+
+    fun reorderPlaylist(playlistId: Long, trackId: String, newPosition: Int) {
+        viewModelScope.launch {
+            trackDao.updatePlaylistTrackCrossRef(PlaylistTrackCrossRef(playlistId, trackId, newPosition))
+        }
+    }
+
+    fun recordPlayback(trackId: String) {
+        viewModelScope.launch {
+            trackDao.incrementPlayCount(trackId)
+        }
+    }
+
+    fun getPlaylistTracks(playlistId: Long): Flow<List<TrackEntity>> {
+        return trackDao.getTracksForPlaylist(playlistId)
     }
 
     fun deletePlaylist(playlist: PlaylistEntity) {

@@ -13,6 +13,7 @@ import com.ansh.ytmusicpreimum.data.TrackEntity
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -118,7 +119,7 @@ class MelodifyDownloadManager(private val context: Context) {
                         "Unknown Size"
                     }
                     
-                    _downloadStates.value += (track.id to DownloadState(DownloadStatus.DOWNLOADING, 0f, totalMb, quality))
+                    _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.DOWNLOADING, 0f, totalMb, quality)) }
 
                     val inputStream = body.byteStream()
                     val outputStream = FileOutputStream(file)
@@ -129,15 +130,22 @@ class MelodifyDownloadManager(private val context: Context) {
                     var bytesRead: Int
                     var currentBytes = 0L
 
+                    var lastProgressUpdate = 0L
                     while (isActive) {
                         bytesRead = inputStream.read(buffer)
                         if (bytesRead == -1) break
                         
                         outputStream.write(buffer, 0, bytesRead)
                         currentBytes += bytesRead
+
                         if (totalBytes > 0) {
-                            val progress = currentBytes.toFloat() / totalBytes.toFloat()
-                            _downloadStates.value += (track.id to DownloadState(DownloadStatus.DOWNLOADING, progress, totalMb, quality))
+                            val now = System.currentTimeMillis()
+                            if (now - lastProgressUpdate > 500) { // Update every 500ms
+                                val progress = currentBytes.toFloat() / totalBytes.toFloat()
+                            _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.DOWNLOADING, progress, totalMb, quality)) }
+                                updateOngoingNotification(track, (progress * 100).toInt())
+                                lastProgressUpdate = now
+                            }
                         }
                     }
 
@@ -147,16 +155,18 @@ class MelodifyDownloadManager(private val context: Context) {
                     if (isActive) {
                         val updatedTrack = track.copy(isDownloaded = true, localFilePath = file.absolutePath)
                         trackDao.insertTrack(updatedTrack)
-                        showDownloadNotification(track.title)
-                        _downloadStates.value += (track.id to DownloadState(DownloadStatus.COMPLETED, 1f, totalMb, quality))
+                        showDownloadCompleteNotification(track, totalMb)
+                        _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.COMPLETED, 1f, totalMb, quality)) }
                     } else {
                         if (file.exists()) file.delete()
-                        _downloadStates.value -= track.id
+                        _downloadStates.update { it - track.id }
+                        cancelOngoingNotification(track.id)
                     }
                 }
             } catch (e: Exception) {
                 android.util.Log.e("MelodifyDownload", "Error downloading ${track.title}", e)
-                _downloadStates.value += (track.id to DownloadState(DownloadStatus.FAILED, quality = quality))
+                _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.FAILED, quality = quality)) }
+                cancelOngoingNotification(track.id)
             } finally {
                 activeJobs.remove(track.id)
                 processQueue(userTier)
@@ -174,19 +184,43 @@ class MelodifyDownloadManager(private val context: Context) {
 
         activeJobs[songId]?.cancel()
         activeJobs.remove(songId)
-        _downloadStates.value -= songId
+        _downloadStates.update { it - songId }
+        cancelOngoingNotification(songId)
     }
 
-    private fun showDownloadNotification(title: String) {
+    private fun updateOngoingNotification(track: TrackEntity, progress: Int) {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notification = NotificationCompat.Builder(context, "download_channel")
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle("Downloading ${track.title}")
+            .setContentText("$progress%")
+            .setProgress(100, progress, false)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+        notificationManager.notify(track.id.hashCode(), notification)
+    }
+
+    private fun showDownloadCompleteNotification(track: TrackEntity, size: String) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val notification = NotificationCompat.Builder(context, "download_channel")
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle("Download Complete")
-            .setContentText("Downloaded $title successfully!")
+            .setContentText("'${track.title}' ($size) is now available offline.")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .build()
-        notificationManager.notify(title.hashCode(), notification)
+        notificationManager.notify(track.id.hashCode(), notification)
+    }
+
+    private fun cancelOngoingNotification(trackId: String) {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(trackId.hashCode())
+    }
+
+    private fun showDownloadNotification(title: String) {
+        // Legacy, using showDownloadCompleteNotification instead
     }
 
     private fun createNotificationChannel() {

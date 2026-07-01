@@ -13,10 +13,15 @@ import androidx.media3.session.SessionToken
 import androidx.core.content.ContextCompat
 import com.ansh.ytmusicpreimum.MusicService
 import com.ansh.ytmusicpreimum.YouTubeExtractor
+import com.ansh.ytmusicpreimum.LyricsManager
+import com.ansh.ytmusicpreimum.LyricsState
 import com.ansh.ytmusicpreimum.MelodifyDownloadManager
 import com.ansh.ytmusicpreimum.MelodifyQueueManager
 import com.ansh.ytmusicpreimum.data.AppDatabase
 import com.ansh.ytmusicpreimum.data.TrackEntity
+import com.ansh.ytmusicpreimum.data.EqualizerPresetEntity
+import androidx.media3.session.SessionCommand
+import android.os.Bundle
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.Job
@@ -28,8 +33,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withTimeoutOrNull
-import androidx.media3.session.SessionCommand
-import android.os.Bundle
 
 import androidx.media3.common.util.UnstableApi
 
@@ -57,6 +60,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var _controller: MediaController? = null
     private val controller: MediaController? get() = _controller
+
+    private var userTier: Int = 0
+    private var canCacheLyrics: Boolean = false
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying
@@ -113,8 +119,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _volume = MutableStateFlow(1.0f)
     val volume: StateFlow<Float> = _volume
 
-    private val _lyrics = MutableStateFlow<String?>(null)
-    val lyrics: StateFlow<String?> = _lyrics
+    private val _lyrics = MutableStateFlow<LyricsState>(LyricsState())
+    val lyrics: StateFlow<LyricsState> = _lyrics
 
     private val _isFetchingLyrics = MutableStateFlow(false)
     val isFetchingLyrics: StateFlow<Boolean> = _isFetchingLyrics
@@ -130,6 +136,24 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _virtualizerStrength = MutableStateFlow<Short>(0)
     val virtualizerStrength: StateFlow<Short> = _virtualizerStrength
+
+    private val _loudnessGain = MutableStateFlow<Int>(0)
+    val loudnessGain: StateFlow<Int> = _loudnessGain
+
+    private val _isEqEnabled = MutableStateFlow(true)
+    val isEqEnabled: StateFlow<Boolean> = _isEqEnabled
+
+    private val _isBassBoostSupported = MutableStateFlow(false)
+    val isBassBoostSupported: StateFlow<Boolean> = _isBassBoostSupported
+
+    private val _isVirtualizerSupported = MutableStateFlow(false)
+    val isVirtualizerSupported: StateFlow<Boolean> = _isVirtualizerSupported
+
+    private val _isLoudnessEnhancerSupported = MutableStateFlow(false)
+    val isLoudnessEnhancerSupported: StateFlow<Boolean> = _isLoudnessEnhancerSupported
+
+    private val _presets = MutableStateFlow<List<EqualizerPresetEntity>>(emptyList())
+    val presets: StateFlow<List<EqualizerPresetEntity>> = _presets
 
     private val sharedPrefs = application.getSharedPreferences("settings", Context.MODE_PRIVATE)
     private val _audioQuality = MutableStateFlow(sharedPrefs.getString("audio_quality", "Medium") ?: "Medium")
@@ -160,6 +184,21 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             putString("queue_json", queueManager.serialize())
             putInt("queue_index", queueManager.getCurrentIndex())
             apply()
+        }
+        
+        // Save to Database for deep restoration
+        viewModelScope.launch(Dispatchers.IO) {
+            trackDao.clearQueue()
+            val queueEntities = queueManager.queue.value.mapIndexed { index, track ->
+                com.ansh.ytmusicpreimum.data.QueueEntity(
+                    trackId = track.id,
+                    title = track.title,
+                    artist = track.artist,
+                    thumbnailUrl = track.thumbnailUrl,
+                    position = index
+                )
+            }
+            trackDao.insertQueue(queueEntities)
         }
     }
 
@@ -270,6 +309,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         
                         @UnstableApi
                         override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                             android.util.Log.d("MusicDiagnostics", "MusicViewModel: Controller reported AudioSessionId: $audioSessionId")
                              fetchEqInfo()
                         }
 
@@ -288,10 +328,18 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             mediaItem?.let { item ->
                                 val queue = queueManager.queue.value
                                 val indexInQueue = queue.indexOfFirst { it.id == item.mediaId }
-                                if (indexInQueue != -1 && indexInQueue != queueManager.getCurrentIndex()) {
-                                    queueManager.setCurrentIndex(indexInQueue)
-                                    // Update controller with even more upcoming items for continuous gapless
-                                    updateControllerQueue(controller, indexInQueue)
+                                if (indexInQueue != -1) {
+                                    if (indexInQueue != queueManager.getCurrentIndex()) {
+                                        queueManager.setCurrentIndex(indexInQueue)
+                                        // Update controller with even more upcoming items for continuous gapless
+                                        updateControllerQueue(controller, indexInQueue)
+                                    }
+                                    
+                                    // Fetch lyrics for the new track automatically on transition
+                                    val track = queue[indexInQueue]
+                                    if (userTier >= 2 || canCacheLyrics) {
+                                        fetchLyrics(track.id, track.title, track.artist)
+                                    }
                                 }
                             }
                         }
@@ -360,15 +408,18 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playSong(videoId: String, title: String, artist: String, artworkUrl: String, otherTracks: List<TrackEntity> = emptyList(), userTier: Int = 0, canCacheLyrics: Boolean = false) {
+        this.userTier = userTier
+        this.canCacheLyrics = canCacheLyrics
         val tapTime = System.currentTimeMillis()
         android.util.Log.d("PlaybackProfile", "User Tap: $videoId at $tapTime")
         
         lastManualPlayTime = System.currentTimeMillis()
         isPreparingManually = true
         
-        // Record History (Async)
+        // Record History & Playback (Async)
         viewModelScope.launch(Dispatchers.IO) {
             repository.addToHistory(TrackEntity(id = videoId, title = title, artist = artist, thumbnailUrl = artworkUrl))
+            trackDao.incrementPlayCount(videoId)
         }
 
         // Enforce Quality based on Tier
@@ -390,7 +441,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _currentMediaItem.value = loadingMediaItem
         _isPlaying.value = true
         _isBuffering.value = true
-        _lyrics.value = null
+        _lyrics.value = LyricsState()
         _playbackError.value = null
         isHistoryRecorded = false
         android.util.Log.d("PlaybackProfile", "Player UI Open: +${System.currentTimeMillis() - tapTime}ms")
@@ -405,7 +456,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             // Fetch lyrics in background
             launch {
                 if (userTier >= 2 || canCacheLyrics) {
-                    fetchLyrics(title, artist)
+                    fetchLyrics(videoId, title, artist)
                 }
             }
 
@@ -634,6 +685,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         queueManager.moveTrack(from, to)
     }
 
+    fun clearQueue() {
+        queueManager.clearQueue()
+        _controller?.let {
+            it.stop()
+            it.clearMediaItems()
+        }
+        _currentMediaItem.value = null
+        _isPlaying.value = false
+    }
+
     fun toggleShuffle() {
         _controller?.let {
             val nextMode = !it.shuffleModeEnabled
@@ -657,30 +718,124 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     @UnstableApi
+    fun setEqEnabled(enabled: Boolean) {
+        _isEqEnabled.value = enabled
+        _controller?.let { controller ->
+            val args = Bundle().apply {
+                putBoolean("enabled", enabled)
+            }
+            controller.sendCustomCommand(SessionCommand("SET_EQ_ENABLED", Bundle.EMPTY), args)
+        }
+    }
+
+    @UnstableApi
     fun fetchEqInfo() {
         _controller?.let { controller ->
             val command = SessionCommand("GET_EQ_INFO", Bundle.EMPTY)
             val future = controller.sendCustomCommand(command, Bundle.EMPTY)
             future.addListener({
-                val result = future.get()
-                val extras = result.extras
-                if (result.resultCode == 0 && !extras.isEmpty) {
-                    val numBands = extras.getInt("numBands")
-                    val freqs = extras.getIntArray("centerFreqs")
-                    val range = extras.getShortArray("levelRange")
-                    val bass = extras.getShort("bassBoostStrength")
-                    
-                    if (freqs != null && range != null) {
-                        _eqLevelRange.value = Pair(range[0], range[1])
-                        val bands = List(numBands) { i ->
-                            EqBand(i, freqs[i], 0) // Levels initially 0 (flat)
+                try {
+                    val result = future.get()
+                    val extras = result.extras
+                    if (result.resultCode == 0 && !extras.isEmpty) {
+                        val eqEnabled = extras.getBoolean("isEnabled", true)
+                        _isEqEnabled.value = eqEnabled
+
+                        val numBands = extras.getInt("numBands")
+                        val freqs = extras.getIntArray("centerFreqs")
+                        val range = extras.getShortArray("levelRange")
+                        val currentLevels = extras.getShortArray("currentLevels")
+                        val bass = extras.getShort("bassBoostStrength")
+                        val virt = extras.getShort("virtualizerStrength")
+                        val loudness = extras.getInt("loudnessGain")
+                        val bassSupported = extras.getBoolean("isBassBoostSupported", false)
+                        val virtSupported = extras.getBoolean("isVirtualizerSupported", false)
+                        val loudnessSupported = extras.getBoolean("isLoudnessEnhancerSupported", false)
+                        
+                        if (freqs != null && range != null) {
+                            _eqLevelRange.value = Pair(range[0], range[1])
+                            val bands = List(numBands) { i ->
+                                EqBand(i, freqs[i], currentLevels?.get(i) ?: 0)
+                            }
+                            _eqBands.value = bands
+
+                            _isBassBoostSupported.value = bassSupported
+                            _bassBoostStrength.value = bass
+
+                            _isVirtualizerSupported.value = virtSupported
+                            _virtualizerStrength.value = virt
+
+                            _isLoudnessEnhancerSupported.value = loudnessSupported
+                            _loudnessGain.value = loudness
+
+                            android.util.Log.d("MusicDiagnostics", "EQ State: $numBands bands, Bass: $bass, Virt: $virt, Loudness: $loudness")
+                            android.util.Log.d("MusicDiagnostics", "BassBoost Supported: $bassSupported, Virtualizer Supported: $virtSupported, Loudness Enhancer Supported: $loudnessSupported")
                         }
-                        _eqBands.value = bands
-                        _bassBoostStrength.value = bass
-                        android.util.Log.d("MusicViewModel", "EQ Info fetched: $numBands bands, Bass: $bass")
                     }
+                } catch (e: Exception) {
+                    android.util.Log.e("MusicViewModel", "Error fetching EQ info", e)
                 }
             }, ContextCompat.getMainExecutor(getApplication()))
+        }
+        loadPresets()
+    }
+
+    private fun loadPresets() {
+        viewModelScope.launch {
+            trackDao.getAllPresets().collect { 
+                _presets.value = it
+            }
+        }
+    }
+
+    @UnstableApi
+    fun savePreset(name: String) {
+        viewModelScope.launch {
+            val bandLevels = _eqBands.value.joinToString(",") { it.level.toString() }
+            val preset = EqualizerPresetEntity(
+                name = name,
+                bandLevels = bandLevels,
+                bassBoost = _bassBoostStrength.value,
+                virtualizer = _virtualizerStrength.value,
+                loudness = _loudnessGain.value
+            )
+            trackDao.insertPreset(preset)
+            android.util.Log.d("MusicViewModel", "Preset saved: $name")
+        }
+    }
+
+    @UnstableApi
+    fun applyPreset(preset: EqualizerPresetEntity) {
+        val levels = preset.bandLevels.split(",").map { it.toShort() }
+        val currentBands = _eqBands.value.toMutableList()
+        levels.forEachIndexed { index, level ->
+            if (index < currentBands.size) {
+                currentBands[index] = currentBands[index].copy(level = level)
+                setEqBandLevel(index, level)
+            }
+        }
+        _eqBands.value = currentBands
+        setBassBoost(preset.bassBoost)
+        setVirtualizer(preset.virtualizer, userTier)
+        setLoudness(preset.loudness)
+    }
+
+    @UnstableApi
+    fun deletePreset(preset: EqualizerPresetEntity) {
+        viewModelScope.launch {
+            trackDao.deletePreset(preset)
+        }
+    }
+
+    @UnstableApi
+    fun setLoudness(gain: Int) {
+        if (!_isLoudnessEnhancerSupported.value) return
+        _loudnessGain.value = gain
+        _controller?.let { controller ->
+            val args = Bundle().apply {
+                putInt("gain", gain)
+            }
+            controller.sendCustomCommand(SessionCommand("SET_LOUDNESS", Bundle.EMPTY), args)
         }
     }
 
@@ -703,6 +858,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     @UnstableApi
     fun setBassBoost(strength: Short) {
+        if (!_isBassBoostSupported.value) return
         _bassBoostStrength.value = strength
         _controller?.let { controller ->
             val args = Bundle().apply {
@@ -713,24 +869,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     @UnstableApi
-    fun setVirtualizer(strength: Short, userTier: Int = 0) {
+    fun setVirtualizer(strength: Short, userTier: Int = 2) {
+        if (!_isVirtualizerSupported.value) return
         _virtualizerStrength.value = strength
         _controller?.let { controller ->
             val args = Bundle().apply {
                 putShort("strength", strength)
             }
             controller.sendCustomCommand(SessionCommand("SET_VIRTUALIZER", Bundle.EMPTY), args)
-            
-            // Freemium 8D Logic: Reset after 1 minute for Free users
-            if (userTier == 0 && strength > 0) {
-                viewModelScope.launch {
-                    delay(60000) // 1 minute trial
-                    if (_virtualizerStrength.value > 0) {
-                        setVirtualizer(0)
-                        _playbackError.value = "8D Trial Ended. Upgrade for unlimited use!"
-                    }
-                }
-            }
         }
     }
 
@@ -755,49 +901,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         downloadManager.cancelDownload(songId)
     }
 
-    private fun fetchLyrics(title: String, artist: String) {
+    private fun fetchLyrics(videoId: String, title: String, artist: String) {
         viewModelScope.launch {
+            _lyrics.value = LyricsState(isLoading = true)
             _isFetchingLyrics.value = true
             try {
-                // Advanced cleaning: "Artist - Song (Official Video)" -> "Song"
-                var cleanTitle = title
-                if (cleanTitle.contains("-")) {
-                    cleanTitle = cleanTitle.split("-").last()
-                }
-                cleanTitle = cleanTitle.replace(Regex("\\(.*?\\)"), "")
-                    .replace(Regex("\\[.*?\\]"), "")
-                    .replace("Official Video", "", ignoreCase = true)
-                    .replace("Lyrics", "", ignoreCase = true)
-                    .trim()
-
-                val url = "https://lrclib.net/api/get?artist=${java.net.URLEncoder.encode(artist, "UTF-8")}&track=${java.net.URLEncoder.encode(cleanTitle, "UTF-8")}"
-                
-                val client = okhttp3.OkHttpClient()
-                val request = okhttp3.Request.Builder().url(url).build()
-                
-                withContext(kotlinx.coroutines.Dispatchers.IO) {
-                    client.newCall(request).execute().use { response ->
-                        if (response.isSuccessful) {
-                            val body = response.body?.string()
-                            if (body != null) {
-                                val json = org.json.JSONObject(body)
-                                val lyricsText = if (json.has("plainLyrics")) {
-                                    json.getString("plainLyrics")
-                                } else if (json.has("lyrics")) {
-                                    json.getString("lyrics")
-                                } else {
-                                    "No lyrics found."
-                                }
-                                _lyrics.value = lyricsText
-                            }
-                        } else {
-                            _lyrics.value = "Lyrics not available for this track."
-                        }
-                    }
-                }
+                val state = LyricsManager.getLyrics(videoId, title, artist)
+                _lyrics.value = state
             } catch (e: Exception) {
                 android.util.Log.e("MusicViewModel", "Error fetching lyrics", e)
-                _lyrics.value = "Could not load lyrics."
+                _lyrics.value = LyricsState(error = "Could not load lyrics.")
             } finally {
                 _isFetchingLyrics.value = false
             }
