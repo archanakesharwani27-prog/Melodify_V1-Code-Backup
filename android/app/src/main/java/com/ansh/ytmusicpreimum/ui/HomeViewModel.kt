@@ -44,6 +44,25 @@ class HomeViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
+    fun getTracksBySection(title: String): List<TrackEntity> {
+        return when (title) {
+            "Trending Now" -> trendingSongs.value
+            "For You" -> forYouSongs.value
+            "Melodify Picks" -> curatedSections.value.find { it.first == "Melodify Picks" }?.second ?: emptyList()
+            "Hidden Gems" -> curatedSections.value.find { it.first == "Hidden Gems" }?.second ?: emptyList()
+            "Top India" -> globalHits.value.find { it.first == "Top India" }?.second ?: emptyList()
+            "Recently Played" -> emptyList() // Should be from LibraryViewModel
+            else -> {
+                moodMixes.value.find { it.first.contains(title, ignoreCase = true) }?.second
+                    ?: evergreenEmotionalMixes.value.find { it.first.contains(title, ignoreCase = true) }?.second
+                    ?: highEnergyPartyMixes.value.find { it.first.contains(title, ignoreCase = true) }?.second
+                    ?: culturalFestiveMixes.value.find { it.first.contains(title, ignoreCase = true) }?.second
+                    ?: smartMixes.value.find { it.first.contains(title, ignoreCase = true) }?.second
+                    ?: emptyList()
+            }
+        }
+    }
+
     private var lastRefreshTime: Long = 0
     private var repository: TrackRepository? = null
 

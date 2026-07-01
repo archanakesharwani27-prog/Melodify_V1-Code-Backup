@@ -3,10 +3,6 @@ package com.ansh.ytmusicpreimum
 import android.content.Intent
 import android.content.Context
 import kotlinx.coroutines.*
-import android.media.audiofx.BassBoost
-import android.media.audiofx.Equalizer
-import android.media.audiofx.Virtualizer
-import android.media.audiofx.LoudnessEnhancer
 import android.os.Bundle
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -35,16 +31,7 @@ class MusicService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     private lateinit var exoPlayer: ExoPlayer
-    private var equalizer: Equalizer? = null
-    private var bassBoost: BassBoost? = null
-    private var virtualizer: Virtualizer? = null
-    private var loudnessEnhancer: LoudnessEnhancer? = null
     private var audioVisualizer: Visualizer? = null
-
-    // Effect availability flags
-    private var isBassBoostSupported = false
-    private var isVirtualizerSupported = false
-    private var isLoudnessEnhancerSupported = false
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var fadeJob: Job? = null
@@ -57,7 +44,7 @@ class MusicService : MediaSessionService() {
         val sharedPrefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
         crossfadeDurationMs = sharedPrefs.getLong("crossfade_duration", 0L)
 
-        // Force disable Audio Offload to ensure Equalizer works on all devices
+        // Force disable Audio Offload to ensure effects work on all devices (if any were used)
         val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(this)
 
         exoPlayer = ExoPlayer.Builder(this, renderersFactory)
@@ -75,7 +62,6 @@ class MusicService : MediaSessionService() {
         exoPlayer.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 if (audioSessionId != C.AUDIO_SESSION_ID_UNSET && audioSessionId != 0) {
-                    initEqualizer(audioSessionId)
                     initVisualizer(audioSessionId)
                     
                     // Notify system about our audio session
@@ -208,130 +194,11 @@ class MusicService : MediaSessionService() {
                 args: Bundle
             ): ListenableFuture<SessionResult> {
                 when (customCommand.customAction) {
-                    "SET_EQ_BAND" -> {
-                        val band = args.getInt("band")
-                        val level = args.getShort("level")
-                        android.util.Log.d("MusicDiagnostics", "Command received: SET_EQ_BAND $band to $level")
-                        try {
-                            equalizer?.let {
-                                if (!it.enabled) it.enabled = true
-                                it.setBandLevel(band.toShort(), level)
-                                val verified = it.getBandLevel(band.toShort())
-                                android.util.Log.d("MusicDiagnostics", "Equalizer updated: Band $band set to $level. Verification read: $verified. hasControl: ${it.hasControl()}")
-                                saveEqState()
-                            } ?: android.util.Log.w("MusicDiagnostics", "SET_EQ_BAND ignored: Equalizer object is null")
-                        } catch (e: Exception) {
-                            android.util.Log.e("MusicDiagnostics", "Error setting EQ band", e)
-                        }
-                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-                    }
-                    "APPLY_EXTREME_TEST" -> {
-                        android.util.Log.d("MusicDiagnostics", "Command received: APPLY_EXTREME_TEST")
-                        equalizer?.let { eq ->
-                            try {
-                                eq.enabled = true
-                                val range = eq.bandLevelRange
-                                val min = range[0]
-                                val max = range[1]
-                                val bands = eq.numberOfBands.toInt()
-                                // Step 5: Band1=MIN, Band2=MIN, Band3=MAX, Band4=MIN, Band5=MAX
-                                if (bands >= 5) {
-                                    eq.setBandLevel(0, min)
-                                    eq.setBandLevel(1, min)
-                                    eq.setBandLevel(2, max)
-                                    eq.setBandLevel(3, min)
-                                    eq.setBandLevel(4, max)
-                                } else {
-                                    for (i in 0 until bands) {
-                                        eq.setBandLevel(i.toShort(), if (i % 2 == 0) min else max)
-                                    }
-                                }
-                                android.util.Log.d("MusicDiagnostics", "Extreme Test applied. hasControl: ${eq.hasControl()}")
-                                saveEqState()
-                            } catch (e: Exception) {
-                                android.util.Log.e("MusicDiagnostics", "Failed to apply extreme test", e)
-                            }
-                        }
-                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-                    }
-                    "GET_EQ_INFO" -> {
-                        val resultBundle = Bundle()
-                        val eqEnabled = getSharedPreferences("equalizer_state", Context.MODE_PRIVATE).getBoolean("is_enabled", true)
-                        resultBundle.putBoolean("isEnabled", eqEnabled)
-                        equalizer?.let {
-                            resultBundle.putInt("numBands", it.numberOfBands.toInt())
-                            val centerFreqs = IntArray(it.numberOfBands.toInt()) { i -> it.getCenterFreq(i.toShort()) }
-                            resultBundle.putIntArray("centerFreqs", centerFreqs)
-                            val range = it.bandLevelRange
-                            resultBundle.putShortArray("levelRange", range)
-                            val levels = ShortArray(it.numberOfBands.toInt()) { i -> it.getBandLevel(i.toShort()) }
-                            resultBundle.putShortArray("currentLevels", levels)
-                            android.util.Log.d("MusicDiagnostics", "Reporting EQ Info: bands=${it.numberOfBands}, hasControl=${it.hasControl()}")
-                        }
-                        resultBundle.putBoolean("isBassBoostSupported", isBassBoostSupported)
-                        if (isBassBoostSupported) {
-                            bassBoost?.let {
-                                resultBundle.putShort("bassBoostStrength", it.roundedStrength)
-                                android.util.Log.d("MusicDiagnostics", "Reporting BassBoost: strength=${it.roundedStrength}")
-                            }
-                        }
-                        resultBundle.putBoolean("isVirtualizerSupported", isVirtualizerSupported)
-                        if (isVirtualizerSupported) {
-                            virtualizer?.let {
-                                resultBundle.putShort("virtualizerStrength", it.roundedStrength)
-                                android.util.Log.d("MusicDiagnostics", "Reporting Virtualizer: strength=${it.roundedStrength}")
-                            }
-                        }
-                        resultBundle.putBoolean("isLoudnessEnhancerSupported", isLoudnessEnhancerSupported)
-                        if (isLoudnessEnhancerSupported) {
-                            loudnessEnhancer?.let {
-                                resultBundle.putInt("loudnessGain", it.targetGain.toInt())
-                                android.util.Log.d("MusicDiagnostics", "Reporting Loudness: gain=${it.targetGain}")
-                            }
-                        }
-                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, resultBundle))
-                    }
-                    "SET_BASS_BOOST" -> {
-                        val strength = args.getShort("strength")
-                        android.util.Log.d("MusicDiagnostics", "Command received: SET_BASS_BOOST $strength")
-                        bassBoost?.setStrength(strength)
-                        android.util.Log.d("MusicDiagnostics", "BassBoost updated: strength=${bassBoost?.roundedStrength}, hasControl=${bassBoost?.hasControl()}")
-                        saveEqState()
-                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-                    }
-                    "SET_VIRTUALIZER" -> {
-                        val strength = args.getShort("strength")
-                        android.util.Log.d("MusicDiagnostics", "Command received: SET_VIRTUALIZER $strength")
-                        virtualizer?.setStrength(strength)
-                        android.util.Log.d("MusicDiagnostics", "Virtualizer updated: strength=${virtualizer?.roundedStrength}, hasControl=${virtualizer?.hasControl()}")
-                        saveEqState()
-                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-                    }
-                    "SET_LOUDNESS" -> {
-                        val gain = args.getInt("gain")
-                        android.util.Log.d("MusicDiagnostics", "Command received: SET_LOUDNESS $gain")
-                        loudnessEnhancer?.setTargetGain(gain)
-                        android.util.Log.d("MusicDiagnostics", "LoudnessEnhancer updated: gain=${loudnessEnhancer?.targetGain}")
-                        saveEqState()
-                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-                    }
                     "SET_CROSSFADE" -> {
                         val duration = args.getLong("duration")
                         crossfadeDurationMs = duration
                         getSharedPreferences("settings", Context.MODE_PRIVATE).edit()
                             .putLong("crossfade_duration", duration).apply()
-                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-                    }
-                    "SET_EQ_ENABLED" -> {
-                        val enabled = args.getBoolean("enabled")
-                        android.util.Log.d("MusicDiagnostics", "Command received: SET_EQ_ENABLED $enabled")
-                        equalizer?.enabled = enabled
-                        bassBoost?.enabled = enabled
-                        virtualizer?.enabled = enabled
-                        loudnessEnhancer?.enabled = enabled
-                        getSharedPreferences("equalizer_state", Context.MODE_PRIVATE).edit()
-                            .putBoolean("is_enabled", enabled).apply()
-                        android.util.Log.d("MusicDiagnostics", "All effects enabled state updated to $enabled. Equalizer hasControl: ${equalizer?.hasControl()}")
                         return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                     }
                 }
@@ -342,23 +209,6 @@ class MusicService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, exoPlayer)
             .setCallback(callback)
             .build()
-    }
-
-    private fun saveEqState() {
-        val sharedPrefs = getSharedPreferences("equalizer_state", Context.MODE_PRIVATE)
-        sharedPrefs.edit().apply {
-            equalizer?.let { eq ->
-                val numBands = eq.numberOfBands.toInt()
-                putInt("num_bands", numBands)
-                for (i in 0 until numBands) {
-                    putInt("band_$i", eq.getBandLevel(i.toShort()).toInt())
-                }
-            }
-            bassBoost?.let { putInt("bass_boost", it.roundedStrength.toInt()) }
-            virtualizer?.let { putInt("virtualizer", it.roundedStrength.toInt()) }
-            loudnessEnhancer?.let { putInt("loudness", it.targetGain.toInt()) }
-            apply()
-        }
     }
 
     private fun savePlaybackState() {
@@ -428,107 +278,6 @@ class MusicService : MediaSessionService() {
             }
         }
         return false
-    }
-
-    @OptIn(UnstableApi::class)
-    private fun initEqualizer(audioSessionId: Int) {
-        android.util.Log.d("MusicDiagnostics", "initEqualizer: Attempting to initialize effects for session $audioSessionId")
-        android.util.Log.d("MusicDiagnostics", "ExoPlayer AudioSessionId according to player: ${exoPlayer.audioSessionId}")
-        
-        try {
-            equalizer?.release()
-            bassBoost?.release()
-            virtualizer?.release()
-            loudnessEnhancer?.release()
-
-            // Reset availability flags
-            isBassBoostSupported = false
-            isVirtualizerSupported = false
-            isLoudnessEnhancerSupported = false
-            
-            // Priority 0 is default and usually enough. 
-            // We use the specific sessionId from onAudioSessionIdChanged
-            equalizer = Equalizer(1000, audioSessionId).apply {
-                enabled = true
-            }
-            
-            android.util.Log.d("MusicDiagnostics", "--- STEP 1: Initial Effect Status ---")
-            android.util.Log.d("MusicDiagnostics", "Equalizer Initialized: session=$audioSessionId, hasControl=${equalizer?.hasControl()}, bands=${equalizer?.numberOfBands}")
-            
-            try {
-                bassBoost = BassBoost(1000, audioSessionId).apply {
-                    enabled = true
-                    isBassBoostSupported = true
-                    android.util.Log.d("MusicDiagnostics", "BassBoost Initialized: hasControl=${hasControl()}")
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("MusicDiagnostics", "BassBoost initialization failed", e)
-            }
-            
-            try {
-                virtualizer = Virtualizer(1000, audioSessionId).apply {
-                    enabled = true
-                    isVirtualizerSupported = true
-                    android.util.Log.d("MusicDiagnostics", "Virtualizer Initialized: hasControl=${hasControl()}")
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("MusicDiagnostics", "Virtualizer initialization failed", e)
-            }
-
-            try {
-                loudnessEnhancer = LoudnessEnhancer(audioSessionId).apply {
-                    enabled = true
-                    isLoudnessEnhancerSupported = true
-                    android.util.Log.d("MusicDiagnostics", "LoudnessEnhancer Initialized")
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("MusicDiagnostics", "LoudnessEnhancer initialization failed", e)
-            }
-            
-            // Restore settings
-            val sharedPrefs = getSharedPreferences("equalizer_state", Context.MODE_PRIVATE)
-            val isEnabled = sharedPrefs.getBoolean("is_enabled", true)
-            
-            equalizer?.enabled = isEnabled
-            bassBoost?.enabled = isEnabled
-            virtualizer?.enabled = isEnabled
-            loudnessEnhancer?.enabled = isEnabled
-
-            val numBands = equalizer?.numberOfBands ?: 0
-            for (i in 0 until numBands) {
-                val level = sharedPrefs.getInt("band_$i", 0).toShort()
-                try {
-                    equalizer?.setBandLevel(i.toShort(), level)
-                    android.util.Log.d("MusicDiagnostics", "Restored Band $i to $level. Verification: ${equalizer?.getBandLevel(i.toShort())}")
-                } catch (e: Exception) {
-                    android.util.Log.e("MusicDiagnostics", "Failed to set Band $i", e)
-                }
-            }
-            
-            try {
-                if (isBassBoostSupported) {
-                    val strength = sharedPrefs.getInt("bass_boost", 0).toShort()
-                    bassBoost?.setStrength(strength)
-                    android.util.Log.d("MusicDiagnostics", "BassBoost Strength Restored: $strength")
-                }
-                if (isVirtualizerSupported) {
-                    val strength = sharedPrefs.getInt("virtualizer", 0).toShort()
-                    virtualizer?.setStrength(strength)
-                    android.util.Log.d("MusicDiagnostics", "Virtualizer Strength Restored: $strength")
-                }
-                if (isLoudnessEnhancerSupported) {
-                    val gain = sharedPrefs.getInt("loudness", 0)
-                    loudnessEnhancer?.setTargetGain(gain)
-                    android.util.Log.d("MusicDiagnostics", "Loudness Gain Restored: $gain")
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("MusicDiagnostics", "Failed to set effect strengths", e)
-            }
-            
-            android.util.Log.d("MusicDiagnostics", "Audio Effects initialization complete. Master Enabled: $isEnabled")
-        } catch (e: Exception) {
-            android.util.Log.e("MusicDiagnostics", "Critical failure in initEqualizer", e)
-        }
     }
 
     private fun startPositionMonitor() {
@@ -603,14 +352,6 @@ class MusicService : MediaSessionService() {
             sendBroadcast(intent)
         }
 
-        equalizer?.release()
-        equalizer = null
-        bassBoost?.release()
-        bassBoost = null
-        virtualizer?.release()
-        virtualizer = null
-        loudnessEnhancer?.release()
-        loudnessEnhancer = null
         audioVisualizer?.release()
         audioVisualizer = null
         mediaSession?.run {

@@ -168,6 +168,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         return trackDao.getTracksForPlaylist(playlistId)
     }
 
+    fun getPlaylistWithTracks(playlistId: Long): Flow<com.ansh.ytmusicpreimum.data.PlaylistWithTracks?> {
+        return trackDao.getPlaylistWithTracks(playlistId)
+    }
+
     fun deletePlaylist(playlist: PlaylistEntity) {
         viewModelScope.launch {
             trackDao.deletePlaylist(playlist)

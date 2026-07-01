@@ -19,7 +19,6 @@ import com.ansh.ytmusicpreimum.MelodifyDownloadManager
 import com.ansh.ytmusicpreimum.MelodifyQueueManager
 import com.ansh.ytmusicpreimum.data.AppDatabase
 import com.ansh.ytmusicpreimum.data.TrackEntity
-import com.ansh.ytmusicpreimum.data.EqualizerPresetEntity
 import androidx.media3.session.SessionCommand
 import android.os.Bundle
 import com.google.common.util.concurrent.ListenableFuture
@@ -35,12 +34,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withTimeoutOrNull
 
 import androidx.media3.common.util.UnstableApi
-
-data class EqBand(
-    val index: Int,
-    val centerFreq: Int,
-    val level: Short
-)
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application)
@@ -125,36 +118,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _isFetchingLyrics = MutableStateFlow(false)
     val isFetchingLyrics: StateFlow<Boolean> = _isFetchingLyrics
 
-    private val _eqBands = MutableStateFlow<List<EqBand>>(emptyList())
-    val eqBands: StateFlow<List<EqBand>> = _eqBands
-
-    private val _eqLevelRange = MutableStateFlow<Pair<Short, Short>>(Pair(-1500, 1500))
-    val eqLevelRange: StateFlow<Pair<Short, Short>> = _eqLevelRange
-
-    private val _bassBoostStrength = MutableStateFlow<Short>(0)
-    val bassBoostStrength: StateFlow<Short> = _bassBoostStrength
-
-    private val _virtualizerStrength = MutableStateFlow<Short>(0)
-    val virtualizerStrength: StateFlow<Short> = _virtualizerStrength
-
-    private val _loudnessGain = MutableStateFlow<Int>(0)
-    val loudnessGain: StateFlow<Int> = _loudnessGain
-
-    private val _isEqEnabled = MutableStateFlow(true)
-    val isEqEnabled: StateFlow<Boolean> = _isEqEnabled
-
-    private val _isBassBoostSupported = MutableStateFlow(false)
-    val isBassBoostSupported: StateFlow<Boolean> = _isBassBoostSupported
-
-    private val _isVirtualizerSupported = MutableStateFlow(false)
-    val isVirtualizerSupported: StateFlow<Boolean> = _isVirtualizerSupported
-
-    private val _isLoudnessEnhancerSupported = MutableStateFlow(false)
-    val isLoudnessEnhancerSupported: StateFlow<Boolean> = _isLoudnessEnhancerSupported
-
-    private val _presets = MutableStateFlow<List<EqualizerPresetEntity>>(emptyList())
-    val presets: StateFlow<List<EqualizerPresetEntity>> = _presets
-
     private val sharedPrefs = application.getSharedPreferences("settings", Context.MODE_PRIVATE)
     private val _audioQuality = MutableStateFlow(sharedPrefs.getString("audio_quality", "Medium") ?: "Medium")
     val audioQuality: StateFlow<String> = _audioQuality
@@ -217,16 +180,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         urlCache.clear() // Clear cache to fetch new quality next time
     }
 
-    @UnstableApi
-    fun setCrossfadeDuration(durationMs: Long) {
-        _crossfadeDuration.value = durationMs
-        sharedPrefs.edit().putLong("crossfade_duration", durationMs).apply()
-        _controller?.let { controller ->
-            val args = Bundle().apply {
-                putLong("duration", durationMs)
-            }
-            controller.sendCustomCommand(SessionCommand("SET_CROSSFADE", Bundle.EMPTY), args)
-        }
+    fun setCrossfadeDuration(duration: Long) {
+        _crossfadeDuration.value = duration
+        sharedPrefs.edit().putLong("crossfade_duration", duration).apply()
     }
 
     private fun restorePlaybackState() {
@@ -310,7 +266,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         @UnstableApi
                         override fun onAudioSessionIdChanged(audioSessionId: Int) {
                              android.util.Log.d("MusicDiagnostics", "MusicViewModel: Controller reported AudioSessionId: $audioSessionId")
-                             fetchEqInfo()
                         }
 
                         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -715,169 +670,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             _repeatMode.value = nextMode
             android.util.Log.d("MusicViewModel", "toggleRepeatMode: $nextMode")
         } ?: android.util.Log.e("MusicViewModel", "toggleRepeatMode: controller is null")
-    }
-
-    @UnstableApi
-    fun setEqEnabled(enabled: Boolean) {
-        _isEqEnabled.value = enabled
-        _controller?.let { controller ->
-            val args = Bundle().apply {
-                putBoolean("enabled", enabled)
-            }
-            controller.sendCustomCommand(SessionCommand("SET_EQ_ENABLED", Bundle.EMPTY), args)
-        }
-    }
-
-    @UnstableApi
-    fun fetchEqInfo() {
-        _controller?.let { controller ->
-            val command = SessionCommand("GET_EQ_INFO", Bundle.EMPTY)
-            val future = controller.sendCustomCommand(command, Bundle.EMPTY)
-            future.addListener({
-                try {
-                    val result = future.get()
-                    val extras = result.extras
-                    if (result.resultCode == 0 && !extras.isEmpty) {
-                        val eqEnabled = extras.getBoolean("isEnabled", true)
-                        _isEqEnabled.value = eqEnabled
-
-                        val numBands = extras.getInt("numBands")
-                        val freqs = extras.getIntArray("centerFreqs")
-                        val range = extras.getShortArray("levelRange")
-                        val currentLevels = extras.getShortArray("currentLevels")
-                        val bass = extras.getShort("bassBoostStrength")
-                        val virt = extras.getShort("virtualizerStrength")
-                        val loudness = extras.getInt("loudnessGain")
-                        val bassSupported = extras.getBoolean("isBassBoostSupported", false)
-                        val virtSupported = extras.getBoolean("isVirtualizerSupported", false)
-                        val loudnessSupported = extras.getBoolean("isLoudnessEnhancerSupported", false)
-                        
-                        if (freqs != null && range != null) {
-                            _eqLevelRange.value = Pair(range[0], range[1])
-                            val bands = List(numBands) { i ->
-                                EqBand(i, freqs[i], currentLevels?.get(i) ?: 0)
-                            }
-                            _eqBands.value = bands
-
-                            _isBassBoostSupported.value = bassSupported
-                            _bassBoostStrength.value = bass
-
-                            _isVirtualizerSupported.value = virtSupported
-                            _virtualizerStrength.value = virt
-
-                            _isLoudnessEnhancerSupported.value = loudnessSupported
-                            _loudnessGain.value = loudness
-
-                            android.util.Log.d("MusicDiagnostics", "EQ State: $numBands bands, Bass: $bass, Virt: $virt, Loudness: $loudness")
-                            android.util.Log.d("MusicDiagnostics", "BassBoost Supported: $bassSupported, Virtualizer Supported: $virtSupported, Loudness Enhancer Supported: $loudnessSupported")
-                        }
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("MusicViewModel", "Error fetching EQ info", e)
-                }
-            }, ContextCompat.getMainExecutor(getApplication()))
-        }
-        loadPresets()
-    }
-
-    private fun loadPresets() {
-        viewModelScope.launch {
-            trackDao.getAllPresets().collect { 
-                _presets.value = it
-            }
-        }
-    }
-
-    @UnstableApi
-    fun savePreset(name: String) {
-        viewModelScope.launch {
-            val bandLevels = _eqBands.value.joinToString(",") { it.level.toString() }
-            val preset = EqualizerPresetEntity(
-                name = name,
-                bandLevels = bandLevels,
-                bassBoost = _bassBoostStrength.value,
-                virtualizer = _virtualizerStrength.value,
-                loudness = _loudnessGain.value
-            )
-            trackDao.insertPreset(preset)
-            android.util.Log.d("MusicViewModel", "Preset saved: $name")
-        }
-    }
-
-    @UnstableApi
-    fun applyPreset(preset: EqualizerPresetEntity) {
-        val levels = preset.bandLevels.split(",").map { it.toShort() }
-        val currentBands = _eqBands.value.toMutableList()
-        levels.forEachIndexed { index, level ->
-            if (index < currentBands.size) {
-                currentBands[index] = currentBands[index].copy(level = level)
-                setEqBandLevel(index, level)
-            }
-        }
-        _eqBands.value = currentBands
-        setBassBoost(preset.bassBoost)
-        setVirtualizer(preset.virtualizer, userTier)
-        setLoudness(preset.loudness)
-    }
-
-    @UnstableApi
-    fun deletePreset(preset: EqualizerPresetEntity) {
-        viewModelScope.launch {
-            trackDao.deletePreset(preset)
-        }
-    }
-
-    @UnstableApi
-    fun setLoudness(gain: Int) {
-        if (!_isLoudnessEnhancerSupported.value) return
-        _loudnessGain.value = gain
-        _controller?.let { controller ->
-            val args = Bundle().apply {
-                putInt("gain", gain)
-            }
-            controller.sendCustomCommand(SessionCommand("SET_LOUDNESS", Bundle.EMPTY), args)
-        }
-    }
-
-    @UnstableApi
-    fun setEqBandLevel(bandIndex: Int, level: Short) {
-        val currentBands = _eqBands.value.toMutableList()
-        if (bandIndex in currentBands.indices) {
-            currentBands[bandIndex] = currentBands[bandIndex].copy(level = level)
-            _eqBands.value = currentBands
-            
-            _controller?.let { controller ->
-                val args = Bundle().apply {
-                    putInt("band", bandIndex)
-                    putShort("level", level)
-                }
-                controller.sendCustomCommand(SessionCommand("SET_EQ_BAND", Bundle.EMPTY), args)
-            }
-        }
-    }
-
-    @UnstableApi
-    fun setBassBoost(strength: Short) {
-        if (!_isBassBoostSupported.value) return
-        _bassBoostStrength.value = strength
-        _controller?.let { controller ->
-            val args = Bundle().apply {
-                putShort("strength", strength)
-            }
-            controller.sendCustomCommand(SessionCommand("SET_BASS_BOOST", Bundle.EMPTY), args)
-        }
-    }
-
-    @UnstableApi
-    fun setVirtualizer(strength: Short, userTier: Int = 2) {
-        if (!_isVirtualizerSupported.value) return
-        _virtualizerStrength.value = strength
-        _controller?.let { controller ->
-            val args = Bundle().apply {
-                putShort("strength", strength)
-            }
-            controller.sendCustomCommand(SessionCommand("SET_VIRTUALIZER", Bundle.EMPTY), args)
-        }
     }
 
     fun downloadTrack(track: TrackEntity, quality: String = "High", userTier: Int = 0, networkType: Int = 0) {
