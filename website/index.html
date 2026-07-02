@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Melodify | Next-Gen Music Experience</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --primary: #00E5FF;
+            --secondary: #E91E63;
+            --bg: #030712;
+        }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg);
+            color: white;
+            scroll-behavior: smooth;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .text-glow {
+            text-shadow: 0 0 15px rgba(0, 229, 255, 0.5);
+        }
+        .glow-btn {
+            box-shadow: 0 0 25px rgba(0, 229, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        .glow-btn:hover {
+            box-shadow: 0 0 40px rgba(0, 229, 255, 0.5);
+            transform: translateY(-2px);
+        }
+        .phone-frame {
+            border: 12px solid #111827;
+            border-radius: 3.5rem;
+            background: #000;
+            box-shadow: 0 0 100px rgba(0, 229, 255, 0.1);
+        }
+        .section-title {
+            background: linear-gradient(to right, #fff, #64748b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    </style>
+</head>
+<body class="overflow-x-hidden">
+
+    <!-- NAVIGATION -->
+    <nav class="fixed w-full z-50 glass border-b-0 px-8 py-5 flex justify-between items-center top-0">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-cyan-500 rounded-xl flex items-center justify-center rotate-3">
+                <i data-lucide="music-2" class="text-black w-6 h-6"></i>
+            </div>
+            <span class="font-extrabold tracking-tight text-2xl italic">MELODIFY</span>
+        </div>
+        <div class="hidden md:flex gap-10 text-sm font-semibold tracking-wide text-gray-400">
+            <a href="#features" class="hover:text-cyan-400 transition-colors uppercase">Features</a>
+            <a href="#virtual" class="hover:text-cyan-400 transition-colors uppercase">Try Live</a>
+            <a href="#about" class="hover:text-cyan-400 transition-colors uppercase">Developer</a>
+        </div>
+        <a href="admin.html" class="text-[10px] text-gray-700 hover:text-cyan-500 transition uppercase tracking-widest font-black">Dev Portal</a>
+    </nav>
+
+    <!-- HERO -->
+    <section class="relative min-h-screen flex flex-col items-center justify-center pt-32 px-6">
+        <div class="absolute inset-0 z-0 overflow-hidden">
+            <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-[120px]"></div>
+            <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/10 rounded-full blur-[120px]"></div>
+        </div>
+
+        <div class="text-center max-w-5xl z-10">
+            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8 animate-pulse">
+                <span class="w-2 h-2 rounded-full bg-cyan-500"></span>
+                <span class="text-xs font-bold tracking-widest uppercase">Version 2.0.0 is Live</span>
+            </div>
+            <h1 class="text-6xl md:text-9xl font-black mb-8 leading-[0.9] tracking-tighter">
+                ELEVATE YOUR <br><span class="section-title italic">VIBE.</span>
+            </h1>
+            <p class="text-gray-400 text-lg md:text-xl mb-12 max-w-2xl mx-auto font-medium">
+                The world's most beautiful music experience for Android. No Ads. No Bullshit. Just Pure Music.
+            </p>
+            <div class="flex flex-col sm:flex-row gap-5 justify-center">
+                <a href="#" id="dl-btn" class="glow-btn bg-cyan-500 text-black px-10 py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-3">
+                    <i data-lucide="download"></i> GET THE APP
+                </a>
+                <a href="#virtual" class="glass px-10 py-5 rounded-2xl font-bold text-lg hover:bg-white/10 transition flex items-center justify-center gap-3">
+                    <i data-lucide="smartphone"></i> TEST DRIVE
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- FEATURES -->
+    <section id="features" class="py-32 px-6 max-w-7xl mx-auto">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="glass p-10 rounded-[2.5rem] relative overflow-hidden group">
+                <div class="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-8">
+                    <i data-lucide="wind" class="text-cyan-400 w-8 h-8"></i>
+                </div>
+                <h3 class="text-2xl font-black mb-4">Buttery Smooth</h3>
+                <p class="text-gray-400 leading-relaxed">Experience a UI that feels alive. Glassmorphism meets fluid animations for a Gen-Z soul.</p>
+                <div class="absolute -bottom-10 -right-10 opacity-5 group-hover:opacity-10 transition">
+                    <i data-lucide="wind" class="w-40 h-40"></i>
+                </div>
+            </div>
+            <div class="glass p-10 rounded-[2.5rem] relative overflow-hidden group">
+                <div class="w-16 h-16 bg-pink-500/10 rounded-2xl flex items-center justify-center mb-8">
+                    <i data-lucide="headphones" class="text-pink-500 w-8 h-8"></i>
+                </div>
+                <h3 class="text-2xl font-black mb-4">Lossless Flow</h3>
+                <p class="text-gray-400 leading-relaxed">Stream your favorite tracks in high fidelity. Every beat, every instrument, perfectly clear.</p>
+                <div class="absolute -bottom-10 -right-10 opacity-5 group-hover:opacity-10 transition">
+                    <i data-lucide="headphones" class="w-40 h-40"></i>
+                </div>
+            </div>
+            <div class="glass p-10 rounded-[2.5rem] relative overflow-hidden group">
+                <div class="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-8">
+                    <i data-lucide="download-cloud" class="text-blue-500 w-8 h-8"></i>
+                </div>
+                <h3 class="text-2xl font-black mb-4">Always Ready</h3>
+                <p class="text-gray-400 leading-relaxed">Download your library and take it to the mountains. Melodify works everywhere.</p>
+                <div class="absolute -bottom-10 -right-10 opacity-5 group-hover:opacity-10 transition">
+                    <i data-lucide="download-cloud" class="w-40 h-40"></i>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- VIRTUAL MOBILE SECTION -->
+    <section id="virtual" class="py-32 px-6 flex flex-col items-center">
+        <h2 class="text-5xl font-black mb-4 text-center">Try Before You <span class="text-cyan-500">Buy.</span></h2>
+        <p class="text-gray-400 mb-16 text-center max-w-xl">Interact with Melodify right in your browser. Experience the future of mobile music apps live.</p>
+
+        <div class="w-full max-w-[340px] aspect-[9/19] phone-frame relative p-4 group">
+            <div class="w-full h-full rounded-[2.8rem] overflow-hidden bg-zinc-900 relative">
+                <!-- Fallback content if emulator not loaded -->
+                <div id="emulator-placeholder" class="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
+                    <div class="w-20 h-20 bg-cyan-500/20 rounded-full flex items-center justify-center mb-6">
+                        <i data-lucide="play" class="text-cyan-500 w-10 h-10"></i>
+                    </div>
+                    <h4 class="font-bold text-xl mb-2">Ready to Launch?</h4>
+                    <p class="text-xs text-gray-500 mb-6">Start a 1-minute live session to test all premium features.</p>
+                    <button onclick="startEmulator()" class="bg-white text-black text-xs font-black px-6 py-3 rounded-full hover:bg-cyan-400 transition">POWER ON</button>
+                </div>
+
+                <!-- Actual Emulator Iframe (Placeholder URL) -->
+                <iframe id="app-frame" class="w-full h-full border-none hidden" src=""></iframe>
+            </div>
+            <div class="absolute -right-20 top-1/2 -rotate-90 text-[10px] font-bold tracking-[0.5em] text-gray-700 opacity-50">VIRTUAL EMULATOR V1</div>
+        </div>
+    </section>
+
+    <!-- DEVELOPER -->
+    <section id="about" class="py-32 px-6 bg-cyan-500/5">
+        <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-20 items-center">
+            <div class="relative">
+                <div class="aspect-square glass rounded-[3rem] p-4">
+                    <div class="w-full h-full rounded-[2.5rem] bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center">
+                        <i data-lucide="user" class="w-40 h-40 text-black opacity-20"></i>
+                    </div>
+                </div>
+                <div class="absolute -bottom-8 -right-8 glass px-8 py-6 rounded-3xl">
+                    <p class="text-xs font-bold text-cyan-400 uppercase mb-1">Created By</p>
+                    <p class="text-xl font-black">Ansh Kesharwani</p>
+                </div>
+            </div>
+            <div>
+                <h2 class="text-5xl font-black mb-8 leading-tight">The Vision Behind <br><span class="text-cyan-500">Melodify.</span></h2>
+                <p id="dev-bio" class="text-lg text-gray-400 leading-relaxed mb-10">
+                    "I wanted to build more than just a player. I wanted a companion for every mood. Melodify is the result of countless nights obsessing over pixels and performance."
+                </p>
+                <div class="flex gap-4">
+                    <a href="#" class="w-12 h-12 glass rounded-2xl flex items-center justify-center hover:text-cyan-400 transition"><i data-lucide="github"></i></a>
+                    <a href="#" class="w-12 h-12 glass rounded-2xl flex items-center justify-center hover:text-cyan-400 transition"><i data-lucide="twitter"></i></a>
+                    <a href="#" class="w-12 h-12 glass rounded-2xl flex items-center justify-center hover:text-cyan-400 transition"><i data-lucide="instagram"></i></a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="py-12 text-center text-gray-600 text-xs border-t border-white/5">
+        <p class="uppercase font-bold tracking-widest">&copy; 2026 Melodify Web Lab. Designed for the Future.</p>
+    </footer>
+
+    <script>
+        lucide.createIcons();
+
+        // Start Virtual Machine simulation
+        function startEmulator() {
+            const frame = document.getElementById('app-frame');
+            const placeholder = document.getElementById('emulator-placeholder');
+
+            placeholder.innerHTML = `<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-500 mb-4"></div><p class="text-xs">Connecting to Secure Server...</p>`;
+
+            setTimeout(() => {
+                // In production, this URL would be your Appetize.io link or similar
+                // frame.src = "https://appetize.io/embed/your_app_id?device=pixel4";
+                // frame.classList.remove('hidden');
+                // placeholder.classList.add('hidden');
+                alert("Emulator initialized! (Note: Connect your Appetize.io API key in the Admin Dashboard to stream your real APK)");
+                placeholder.innerHTML = `<h4 class="font-bold text-xl mb-2">Connected!</h4><p class="text-xs text-gray-500">App stream would start here.</p>`;
+            }, 2000);
+        }
+
+        // FETCH DYNAMIC DATA (Admin Control Logic)
+        function loadDynamicData() {
+            // This is where we will fetch from Firebase later
+            // For now, it's the default static content
+            const settings = JSON.parse(localStorage.getItem('melodify_web_settings')) || {
+                dlUrl: "#",
+                bio: '"I wanted to build more than just a player. I wanted a companion for every mood. Melodify is the result of countless nights obsessing over pixels and performance."'
+            };
+
+            document.getElementById('dl-btn').href = settings.dlUrl;
+            document.getElementById('dev-bio').innerText = settings.bio;
+        }
+
+        window.onload = loadDynamicData;
+    </script>
+</body>
+</html>

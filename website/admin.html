@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer Portal | Melodify Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #030712; color: white; }
+        .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
+        input, textarea { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); padding: 1rem; border-radius: 1rem; width: 100%; color: white; transition: all 0.3s; }
+        input:focus, textarea:focus { outline: none; border-color: #00E5FF; box-shadow: 0 0 15px rgba(0, 229, 255, 0.2); }
+    </style>
+</head>
+<body class="min-h-screen p-6 md:p-12">
+
+    <!-- LOGIN OVERLAY -->
+    <div id="login-overlay" class="fixed inset-0 z-[100] bg-black flex items-center justify-center p-6">
+        <div class="glass p-10 rounded-[2.5rem] w-full max-w-md text-center">
+            <div class="w-16 h-16 bg-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-8 rotate-6">
+                <i data-lucide="shield-check" class="text-black w-8 h-8"></i>
+            </div>
+            <h1 class="text-3xl font-black mb-2">Developer Access</h1>
+            <p class="text-gray-500 text-sm mb-8">Enter your secure key to manage Melodify Web.</p>
+            <input type="password" id="admin-key" placeholder="••••••••" class="text-center text-2xl tracking-[0.5em] mb-6">
+            <button onclick="checkLogin()" class="w-full bg-cyan-500 text-black font-black py-4 rounded-2xl hover:bg-cyan-400 transition">UNLOCK DASHBOARD</button>
+        </div>
+    </div>
+
+    <!-- DASHBOARD CONTENT -->
+    <div id="dashboard" class="max-w-4xl mx-auto hidden">
+        <div class="flex justify-between items-center mb-12">
+            <div>
+                <h2 class="text-4xl font-black">Control <span class="text-cyan-500">Center.</span></h2>
+                <p class="text-gray-500 text-sm">Update website content instantly without coding.</p>
+            </div>
+            <button onclick="logout()" class="p-3 glass rounded-xl text-gray-400 hover:text-red-500 transition"><i data-lucide="log-out"></i></button>
+        </div>
+
+        <div class="grid grid-cols-1 gap-8">
+            <!-- App Details -->
+            <div class="glass p-8 rounded-[2rem]">
+                <h3 class="text-lg font-bold mb-6 flex items-center gap-2">
+                    <i data-lucide="package" class="text-cyan-400 w-5 h-5"></i> App Distribution
+                </h3>
+                <div class="space-y-6">
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase mb-2 block">Download Link (APK URL)</label>
+                        <input type="text" id="input-dl" placeholder="https://drive.google.com/...">
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase mb-2 block">Current Version</label>
+                        <input type="text" id="input-version" placeholder="v2.0.0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Developer Bio -->
+            <div class="glass p-8 rounded-[2rem]">
+                <h3 class="text-lg font-bold mb-6 flex items-center gap-2">
+                    <i data-lucide="user" class="text-cyan-400 w-5 h-5"></i> Developer Profile
+                </h3>
+                <div class="space-y-6">
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase mb-2 block">Public Bio / Quote</label>
+                        <textarea id="input-bio" rows="4" placeholder="Tell your story..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Virtual Mobile Emulator -->
+            <div class="glass p-8 rounded-[2rem]">
+                <h3 class="text-lg font-bold mb-6 flex items-center gap-2">
+                    <i data-lucide="smartphone" class="text-cyan-400 w-5 h-5"></i> Emulator Settings
+                </h3>
+                <div>
+                    <label class="text-xs font-bold text-gray-500 uppercase mb-2 block">Appetize.io App Key</label>
+                    <input type="text" id="input-emulator" placeholder="Enter API Key to stream APK">
+                    <p class="text-[10px] text-gray-600 mt-2">Get your key from appetize.io by uploading your Melodify APK.</p>
+                </div>
+            </div>
+
+            <button onclick="saveChanges()" class="w-full bg-cyan-500 text-black font-black py-5 rounded-2xl text-xl hover:scale-[1.02] transition shadow-2xl shadow-cyan-500/20">
+                APPLY CHANGES GLOBALLY
+            </button>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        const MASTER_KEY = "admin"; // Default key. Change this!
+
+        function checkLogin() {
+            const key = document.getElementById('admin-key').value;
+            if (key === MASTER_KEY) {
+                document.getElementById('login-overlay').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+                loadCurrentSettings();
+            } else {
+                alert("Invalid Developer Key!");
+            }
+        }
+
+        function logout() {
+            location.reload();
+        }
+
+        function loadCurrentSettings() {
+            const settings = JSON.parse(localStorage.getItem('melodify_web_settings')) || {
+                dlUrl: "#",
+                version: "v2.0.0",
+                bio: '"I wanted to build more than just a player. I wanted a companion for every mood. Melodify is the result of countless nights obsessing over pixels and performance."',
+                emulatorKey: ""
+            };
+
+            document.getElementById('input-dl').value = settings.dlUrl;
+            document.getElementById('input-version').value = settings.version;
+            document.getElementById('input-bio').value = settings.bio;
+            document.getElementById('input-emulator').value = settings.emulatorKey;
+        }
+
+        function saveChanges() {
+            const settings = {
+                dlUrl: document.getElementById('input-dl').value,
+                version: document.getElementById('input-version').value,
+                bio: document.getElementById('input-bio').value,
+                emulatorKey: document.getElementById('input-emulator').value
+            };
+
+            localStorage.setItem('melodify_web_settings', JSON.stringify(settings));
+
+            // Notification
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "SUCCESSFULLY UPDATED!";
+            btn.classList.replace('bg-cyan-500', 'bg-green-500');
+
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.classList.replace('bg-green-500', 'bg-cyan-500');
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

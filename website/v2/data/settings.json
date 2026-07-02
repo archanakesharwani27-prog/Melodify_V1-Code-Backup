@@ -1,0 +1,18 @@
+{
+  "apkLink": "https://github.com/anshkesharwani0807-rgb/Melodify_Official/releases/download/v2.0.0-dev5/Melodify-v2.0.2-dev5-.Final.apk",
+  "version": "v2.0.0-dev5",
+  "bio": "\"I believe software should be as beautiful as the art it carries. Melodify is my commitment to a premium, privacy-focused future for Android music.\"",
+  "github": "https://github.com/anshkesharwani0807-rgb/Melodify_Official/releases/tag/v2.0.0-dev5",
+  "email": "anshkesharwani0807@gmail.com",
+  "creatorPic": "/Creator.jpeg",
+  "appLogo": "/logo.png",
+  "screenshots": [
+    "/screenshots/Splash_Screen.jpeg",
+    "/screenshots/Home_Screen.jpeg",
+    "/screenshots/Player_Screen.jpeg",
+    "/screenshots/Search_screen.jpeg",
+    "/screenshots/LIbrary_Screen.jpeg",
+    "/screenshots/Setting_Screen.jpeg"
+  ],
+  "adminKey": "admin"
+}
