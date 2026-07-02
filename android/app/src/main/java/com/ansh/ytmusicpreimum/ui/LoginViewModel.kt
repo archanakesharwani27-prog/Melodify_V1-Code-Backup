@@ -132,18 +132,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun shouldShowNameIntro(): Boolean {
-        if (_userTier.value < 2) return false
-        val now = System.currentTimeMillis()
-        val subStart = _subDate.value
-        val daysElapsed = (now - subStart) / (1000 * 60 * 60 * 24)
-        
-        val allowedDays = when(_subMonths.value) {
-            1 -> 15
-            6 -> 180
-            12 -> 365
-            else -> 0
-        }
-        return daysElapsed < allowedDays
+        // Feature unlocked for everyone: Always show if name is present
+        return _userName.value?.isNotEmpty() == true
     }
 
     fun onLoginSuccess(name: String?, email: String?, photoUrl: String?) {

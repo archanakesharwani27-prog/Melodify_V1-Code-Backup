@@ -252,21 +252,8 @@ class MusicService : MediaSessionService() {
 
     private var backgroundCheckJob: Job? = null
     private fun startBackgroundCheck() {
+        // Feature unlocked for everyone: No more background pausing for non-premium/guests
         backgroundCheckJob?.cancel()
-        backgroundCheckJob = serviceScope.launch {
-            val authPrefs = getSharedPreferences("auth", Context.MODE_PRIVATE)
-            while (isActive && exoPlayer.isPlaying) {
-                delay(5000) // 5 seconds for battery efficiency
-                val isLoggedIn = authPrefs.getBoolean("is_logged_in", false)
-                val userEmail = authPrefs.getString("user_email", "") ?: ""
-                val isGuest = userEmail == "guest@melodify.com" || userEmail.isEmpty()
-                
-                if ((!isLoggedIn || isGuest) && !isAppInForeground() && exoPlayer.isPlaying) {
-                    exoPlayer.pause()
-                    authPrefs.edit().putBoolean("guest_pause_triggered", true).apply()
-                }
-            }
-        }
     }
 
     private fun isAppInForeground(): Boolean {
