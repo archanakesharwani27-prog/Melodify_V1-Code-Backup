@@ -262,6 +262,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                                     }
                                     val track = queue[indexInQueue]
                                     fetchLyrics(track.id, track.title, track.artist)
+                                    
+                                    // YouTube-like Auto-Mix: If we are near the end of the queue (last 2 songs),
+                                    // fetch related songs and append them.
+                                    if (indexInQueue >= queue.size - 2) {
+                                        fetchRelatedSongs(track)
+                                    }
                                 }
                             }
                         }
@@ -595,6 +601,34 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 _lyrics.value = LyricsState(error = "Could not load lyrics.")
             } finally {
                 _isFetchingLyrics.value = false
+            }
+        }
+    }
+
+    private var relatedFetchJob: Job? = null
+    private fun fetchRelatedSongs(track: TrackEntity) {
+        relatedFetchJob?.cancel()
+        relatedFetchJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                android.util.Log.d("MusicViewModel", "Auto-Mix: Fetching related songs for ${track.title}")
+                // Search for related music based on current song's context
+                val query = "${track.title} ${track.artist} radio mix"
+                val results = YouTubeExtractor.search(query)
+                
+                // Filter out songs already in queue to avoid duplicates
+                val existingIds = queueManager.queue.value.map { it.id }.toSet()
+                val newRelated = results.filter { !existingIds.contains(it.id) }.take(10)
+                
+                if (newRelated.isNotEmpty()) {
+                    withContext(Dispatchers.Main) {
+                        newRelated.forEach { relatedTrack ->
+                            queueManager.addToQueue(relatedTrack)
+                        }
+                        android.util.Log.d("MusicViewModel", "Auto-Mix: Added ${newRelated.size} songs to queue.")
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MusicViewModel", "Auto-Mix Error", e)
             }
         }
     }

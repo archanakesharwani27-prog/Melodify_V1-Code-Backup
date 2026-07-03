@@ -103,8 +103,8 @@ class HomeViewModel : ViewModel() {
                 val forYouJob = async { YouTubeExtractor.search(forYouQuery) }
                 
                 val fastResults = awaitAll(trendingJob, forYouJob)
-                val enrichedTrending = repository?.enrichTracks(fastResults[0].shuffled().take(10).ifEmpty { getDummyTracks("Trending") }) ?: emptyList()
-                val enrichedForYou = repository?.enrichTracks(fastResults[1].shuffled().take(10).ifEmpty { getDummyTracks("For You") }) ?: emptyList()
+                val enrichedTrending = repository?.enrichTracks(fastResults[0].shuffled().take(25).ifEmpty { getDummyTracks("Trending") }) ?: emptyList()
+                val enrichedForYou = repository?.enrichTracks(fastResults[1].shuffled().take(25).ifEmpty { getDummyTracks("For You") }) ?: emptyList()
                 
                 _trendingSongs.value = enrichedTrending
                 _forYouSongs.value = enrichedForYou
@@ -116,29 +116,34 @@ class HomeViewModel : ViewModel() {
                     val moodQueries = listOf(
                         "lofi music relaxation",
                         "Gym Motivation Workout Music",
-                        "Deep Focus ambient"
+                        "Deep Focus ambient",
+                        "Emotional Sad Hindi Songs",
+                        "Party Dance Hits 2024"
                     )
                     val smartQueries = listOf(
                         "New Music Release India",
-                        "Evergreen Classic Hits"
+                        "Evergreen Classic Hits 90s",
+                        "Indie Pop India Discovery"
                     )
                     val culturalQueries = listOf(
                         "Bhakti Sagar Shiv Bhajan Aarti",
-                        "Desi Shaadi Sangeet Vibe"
+                        "Desi Shaadi Sangeet Vibe",
+                        "Sufi Hits Nusrat Rahat"
                     )
                     
                     // Load in smaller chunks
                     val moodResults = moodQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
                     _moodMixes.value = listOf(
-                        "Chill / Relaxation Zone" to (repository?.enrichTracks(moodResults[0]) ?: moodResults[0]),
-                        "Workout / Energy Booster" to (repository?.enrichTracks(moodResults[1]) ?: moodResults[1]),
-                        "Focus / Study Mode" to (repository?.enrichTracks(moodResults[2]) ?: moodResults[2])
+                        "Chill / Relaxation Zone" to (repository?.enrichTracks(moodResults[0].shuffled().take(20)) ?: moodResults[0]),
+                        "Workout / Energy Booster" to (repository?.enrichTracks(moodResults[1].shuffled().take(20)) ?: moodResults[1]),
+                        "Focus / Study Mode" to (repository?.enrichTracks(moodResults[2].shuffled().take(20)) ?: moodResults[2])
                     )
                     
                     val smartResults = smartQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
                     _smartMixes.value = listOf(
-                        "Radar / New Release" to (repository?.enrichTracks(smartResults[0]) ?: smartResults[0]),
-                        "Time Capsule" to (repository?.enrichTracks(smartResults[1]) ?: smartResults[1])
+                        "Radar / New Release" to (repository?.enrichTracks(smartResults[0].shuffled().take(20)) ?: smartResults[0]),
+                        "Time Capsule" to (repository?.enrichTracks(smartResults[1].shuffled().take(20)) ?: smartResults[1]),
+                        "Indie Discovery" to (repository?.enrichTracks(smartResults[2].shuffled().take(20)) ?: smartResults[2])
                     )
                     
                     // Delay slightly between chunks to reduce CPU/Network spike
@@ -146,25 +151,28 @@ class HomeViewModel : ViewModel() {
                     
                     val culturalResults = culturalQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
                     _culturalFestiveMixes.value = listOf(
-                        "Bhakti Ras (भक्ति सागर)" to (repository?.enrichTracks(culturalResults[0]) ?: culturalResults[0]),
-                        "Desi Shaadi / Sangeet" to (repository?.enrichTracks(culturalResults[1]) ?: culturalResults[1])
+                        "Bhakti Ras (भक्ति सागर)" to (repository?.enrichTracks(culturalResults[0].shuffled().take(20)) ?: culturalResults[0]),
+                        "Desi Shaadi / Sangeet" to (repository?.enrichTracks(culturalResults[1].shuffled().take(20)) ?: culturalResults[1]),
+                        "Sufi / Soulful" to (repository?.enrichTracks(culturalResults[2].shuffled().take(20)) ?: culturalResults[2])
                     )
                     
                     // Load remaining sections...
                     val topIndia = YouTubeExtractor.search("Top 50 Songs India")
-                    _globalHits.value = listOf("Top India" to (repository?.enrichTracks(topIndia) ?: topIndia))
+                    _globalHits.value = listOf("Top India" to (repository?.enrichTracks(topIndia.take(30)) ?: topIndia))
 
                     // Curated Sections for Flagship Polish
                     val curatedQueries = listOf(
                         "Coke Studio Bharat Hits",
                         "Indie Hindi Gems 2024",
-                        "Bollywood Lo-fi Mashup 1 hour"
+                        "Bollywood Lo-fi Mashup 1 hour",
+                        "Best of Arijit Singh Radio"
                     )
                     val curatedResults = curatedQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
                     _curatedSections.value = listOf(
-                        "Melodify Picks" to (repository?.enrichTracks(curatedResults[0]) ?: curatedResults[0]),
-                        "Hidden Gems" to (repository?.enrichTracks(curatedResults[1]) ?: curatedResults[1]),
-                        "Editor's Choice" to (repository?.enrichTracks(curatedResults[2]) ?: curatedResults[2])
+                        "Melodify Picks" to (repository?.enrichTracks(curatedResults[0].take(15)) ?: curatedResults[0]),
+                        "Hidden Gems" to (repository?.enrichTracks(curatedResults[1].take(15)) ?: curatedResults[1]),
+                        "Editor's Choice" to (repository?.enrichTracks(curatedResults[2].take(15)) ?: curatedResults[2]),
+                        "Artist Spotlight" to (repository?.enrichTracks(curatedResults[3].take(15)) ?: curatedResults[3])
                     )
                 }
 
