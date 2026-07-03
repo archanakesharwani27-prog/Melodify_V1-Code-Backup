@@ -2260,7 +2260,7 @@ fun SettingsScreen(
                 }
                 SettingsItemRow(
                     title = "About Melodify",
-                    subtitle = "Version 1.0.0",
+                    subtitle = "Version 2.0.0",
                     icon = Icons.Default.Info,
                     isDarkTheme = isDarkTheme
                 ) {

@@ -1,5 +1,6 @@
 package com.ansh.ytmusicpreimum.ui
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.os.Bundle
@@ -180,5 +181,12 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     fun updateDownloadNetwork(type: Int) {
         _downloadNetworkType.value = type
         sharedPrefs.edit().putInt("download_network", type).apply()
+    }
+
+    fun sendOtp(phoneNumber: String, activity: Activity, onOtpSent: () -> Unit) {
+        Toast.makeText(getApplication(), "Phone OTP is currently disabled.", Toast.LENGTH_SHORT).show()
+    }
+
+    fun verifyOtp(otp: String) {
     }
 }
