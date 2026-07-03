@@ -19,10 +19,8 @@ import com.ansh.ytmusicpreimum.MelodifyDownloadManager
 import com.ansh.ytmusicpreimum.MelodifyQueueManager
 import com.ansh.ytmusicpreimum.data.AppDatabase
 import com.ansh.ytmusicpreimum.data.TrackEntity
-import androidx.media3.session.SessionCommand
 import android.os.Bundle
 import com.google.common.util.concurrent.ListenableFuture
-import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,7 +29,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withTimeoutOrNull
 
 import androidx.media3.common.util.UnstableApi
 
@@ -53,9 +50,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var _controller: MediaController? = null
     private val controller: MediaController? get() = _controller
-
-    private var userTier: Int = 0
-    private var canCacheLyrics: Boolean = false
 
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying
@@ -87,11 +81,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private var predictivePrefetchJobs = mutableListOf<Job>()
 
     fun prefetchTracks(tracks: List<TrackEntity>) {
-        // Cancel existing predictive prefetches
         predictivePrefetchJobs.forEach { it.cancel() }
         predictivePrefetchJobs.clear()
 
-        // Prefetch ONLY first 2 tracks
         tracks.take(2).forEach { track ->
             val job = viewModelScope.launch {
                 YouTubeExtractor.getAudioUrl(track.id)?.let { url ->
@@ -149,7 +141,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             apply()
         }
         
-        // Save to Database for deep restoration
         viewModelScope.launch(Dispatchers.IO) {
             trackDao.clearQueue()
             val queueEntities = queueManager.queue.value.mapIndexed { index, track ->
@@ -177,7 +168,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun setAudioQuality(quality: String) {
         _audioQuality.value = quality
         sharedPrefs.edit().putString("audio_quality", quality).apply()
-        urlCache.clear() // Clear cache to fetch new quality next time
+        urlCache.clear() 
     }
 
     fun setCrossfadeDuration(duration: Long) {
@@ -217,17 +208,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _currentPosition.value = position
         _shuffleModeEnabled.value = shuffle
         _repeatMode.value = repeat
-        
-        // We don't auto-play on restore, just set the metadata so it shows in UI
-        android.util.Log.d("MusicViewModel", "Restored playback state: $title")
     }
 
     fun initController(context: Context) {
-        if (controllerFuture != null) {
-             android.util.Log.d("MusicViewModel", "initController: Future already exists")
-             return
-        }
-        android.util.Log.d("MusicViewModel", "Initializing MediaController...")
+        if (controllerFuture != null) return
+        
         val sessionToken = SessionToken(context.applicationContext, ComponentName(context, MusicService::class.java))
         controllerFuture = MediaController.Builder(context.applicationContext, sessionToken).buildAsync()
         controllerFuture?.addListener({
@@ -236,17 +221,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 if (controller != null) {
                     _controller = controller
                     _volume.value = controller.volume
-                    android.util.Log.d("MusicViewModel", "MediaController connected successfully. Session: ${controller.connectedToken}")
                     
-                    // Priority: 1. Controller's active item, 2. Restored item
                     if (controller.currentMediaItem != null) {
                         _currentMediaItem.value = controller.currentMediaItem
                         _isPlaying.value = controller.isPlaying
                         _duration.value = controller.duration.coerceAtLeast(0L)
                         _currentPosition.value = controller.currentPosition
-                    } else {
-                        // If controller is empty, we don't clear the restored state
-                        // but we also don't play yet.
                     }
 
                     _isBuffering.value = controller.playbackState == Player.STATE_BUFFERING
@@ -256,21 +236,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     controller.addListener(object : Player.Listener {
                         override fun onIsPlayingChanged(isPlaying: Boolean) {
                             if (isPlaying) isPreparingManually = false
-                            
                             val now = System.currentTimeMillis()
                             if (now - lastManualPlayTime > 2000 || isPlaying) {
                                 _isPlaying.value = isPlaying
                             }
                         }
-                        
-                        @UnstableApi
-                        override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                             android.util.Log.d("MusicDiagnostics", "MusicViewModel: Controller reported AudioSessionId: $audioSessionId")
-                        }
 
                         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                             _playbackError.value = null
-                            
                             val now = System.currentTimeMillis()
                             if (now - lastManualPlayTime > 2000) {
                                 if (mediaItem != null) {
@@ -279,22 +252,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             }
                             _duration.value = controller.duration.coerceAtLeast(0L)
                             
-                            // If transition happened due to skip/auto-next, update queue index
                             mediaItem?.let { item ->
                                 val queue = queueManager.queue.value
                                 val indexInQueue = queue.indexOfFirst { it.id == item.mediaId }
                                 if (indexInQueue != -1) {
                                     if (indexInQueue != queueManager.getCurrentIndex()) {
                                         queueManager.setCurrentIndex(indexInQueue)
-                                        // Update controller with even more upcoming items for continuous gapless
                                         updateControllerQueue(controller, indexInQueue)
                                     }
-                                    
-                                    // Fetch lyrics for the new track automatically on transition
                                     val track = queue[indexInQueue]
-                                    if (userTier >= 2 || canCacheLyrics) {
-                                        fetchLyrics(track.id, track.title, track.artist)
-                                    }
+                                    fetchLyrics(track.id, track.title, track.artist)
                                 }
                             }
                         }
@@ -302,9 +269,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             if (playbackState == Player.STATE_BUFFERING || playbackState == Player.STATE_READY) {
                                 isPreparingManually = false
                             }
-                            
                             _isBuffering.value = playbackState == Player.STATE_BUFFERING
-
                             if (playbackState == Player.STATE_READY) {
                                 _duration.value = controller.duration.coerceAtLeast(0L)
                             }
@@ -316,7 +281,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             _playbackError.value = "Playback Error: ${error.errorCodeName}"
                             _isBuffering.value = false
                             _isPlaying.value = false
-                            android.util.Log.e("MusicViewModel", "Player error: ${error.message}", error)
                         }
                         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                             _shuffleModeEnabled.value = shuffleModeEnabled
@@ -340,7 +304,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             while (true) {
                 _controller?.let {
                     val now = System.currentTimeMillis()
-                    // If we are preparing manually, don't let the loop override the buffering/playing state
                     if (!isPreparingManually && (now - lastManualPlayTime > 2000)) {
                         _isPlaying.value = it.isPlaying
                         _isBuffering.value = it.playbackState == Player.STATE_BUFFERING
@@ -351,10 +314,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
                     }
-                    
-                    if (it.duration > 0) {
-                        _duration.value = it.duration
-                    }
+                    if (it.duration > 0) _duration.value = it.duration
                     _currentPosition.value = it.currentPosition
                 }
                 delay(500)
@@ -362,29 +322,21 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun playSong(videoId: String, title: String, artist: String, artworkUrl: String, otherTracks: List<TrackEntity> = emptyList(), userTier: Int = 0, canCacheLyrics: Boolean = false) {
-        this.userTier = userTier
-        this.canCacheLyrics = canCacheLyrics
+    fun playSong(videoId: String, title: String, artist: String, artworkUrl: String, otherTracks: List<TrackEntity> = emptyList()) {
         val tapTime = System.currentTimeMillis()
-        android.util.Log.d("PlaybackProfile", "User Tap: $videoId at $tapTime")
-        
-        lastManualPlayTime = System.currentTimeMillis()
+        lastManualPlayTime = tapTime
         isPreparingManually = true
         
-        // Record History & Playback (Async)
         viewModelScope.launch(Dispatchers.IO) {
             repository.addToHistory(TrackEntity(id = videoId, title = title, artist = artist, thumbnailUrl = artworkUrl))
             trackDao.incrementPlayCount(videoId)
         }
 
-        // Enforce Quality based on Tier
-        val finalQuality = if (userTier >= 2) _audioQuality.value else "Medium"
-        
         val metadata = androidx.media3.common.MediaMetadata.Builder()
             .setTitle(title)
             .setArtist(artist)
             .setArtworkUri(android.net.Uri.parse(artworkUrl))
-            .setExtras(Bundle().apply { putString("quality", finalQuality) })
+            .setExtras(Bundle().apply { putString("quality", _audioQuality.value) })
             .build()
         
         val loadingMediaItem = MediaItem.Builder()
@@ -392,28 +344,19 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             .setMediaMetadata(metadata)
             .build()
         
-        // Set state immediately for UI responsiveness
         _currentMediaItem.value = loadingMediaItem
         _isPlaying.value = true
         _isBuffering.value = true
         _lyrics.value = LyricsState()
         _playbackError.value = null
         isHistoryRecorded = false
-        android.util.Log.d("PlaybackProfile", "Player UI Open: +${System.currentTimeMillis() - tapTime}ms")
-        android.util.Log.d("PlaybackProfile", "Metadata Ready: +${System.currentTimeMillis() - tapTime}ms")
 
         viewModelScope.launch {
-            // Update Queue Manager
             if (otherTracks.isNotEmpty()) {
                 queueManager.setQueue(otherTracks, videoId)
             }
 
-            // Fetch lyrics in background
-            launch {
-                if (userTier >= 2 || canCacheLyrics) {
-                    fetchLyrics(videoId, title, artist)
-                }
-            }
+            launch { fetchLyrics(videoId, title, artist) }
 
             try {
                 var retryCount = 0
@@ -422,14 +365,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     retryCount++
                 }
 
-                val currentController = _controller
-                if (currentController == null) {
-                    _playbackError.value = "Player not connected."
-                    _isBuffering.value = false
-                    _isPlaying.value = false
-                    isPreparingManually = false
-                    return@launch
-                }
+                val currentController = _controller ?: return@launch
 
                 var urlResult: String? = null
                 val isLocal = videoId.startsWith("content://") || videoId.startsWith("file://")
@@ -437,16 +373,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 if (isLocal) {
                     urlResult = videoId
                 } else {
-                    // CHECK FOR MELODIFY OFFLINE DOWNLOAD
                     val dbTrack = withContext(Dispatchers.IO) {
                         trackDao.getTrackById(videoId)
                     }
-                    
                     if (dbTrack?.isDownloaded == true && dbTrack.localFilePath != null) {
                         val file = java.io.File(dbTrack.localFilePath)
-                        if (file.exists()) {
-                            urlResult = dbTrack.localFilePath
-                        }
+                        if (file.exists()) urlResult = dbTrack.localFilePath
                     }
                 }
                 
@@ -456,36 +388,25 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 
                 if (urlResult != null) {
                     mainItemBuilder.setUri(urlResult)
-                    android.util.Log.d("PlaybackProfile", "Cache Hit (Local/Downloaded): $videoId")
                 } else {
-                    // For remote streams, we let MusicService handle resolution to avoid blocking here,
-                    // BUT if we have it in urlCache, we should set it NOW to save a roundtrip to Service.
                     urlCache[videoId]?.let {
                         mainItemBuilder.setUri(it)
-                        android.util.Log.d("PlaybackProfile", "Cache Hit (Memory): $videoId")
-                    } ?: android.util.Log.d("PlaybackProfile", "Cache Miss: $videoId. Let Service resolve.")
+                    }
                 }
                 
                 val mainItem = mainItemBuilder.build()
                 
-                android.util.Log.d("PlaybackProfile", "MediaItem Ready: +${System.currentTimeMillis() - tapTime}ms")
-                
-                // Optimized: If it's already playing this item, don't reset
                 if (currentController.currentMediaItem?.mediaId == videoId && currentController.playbackState != Player.STATE_IDLE) {
                     currentController.play()
                 } else {
                     currentController.setMediaItem(mainItem)
-                    android.util.Log.d("PlaybackProfile", "ExoPlayer Prepare Start: +${System.currentTimeMillis() - tapTime}ms")
                     currentController.prepare()
                     currentController.play()
                 }
                 
-                if (!isLocal) {
-                    prefetchNext()
-                }
+                if (!isLocal) prefetchNext()
             } catch (e: Exception) {
                 android.util.Log.e("MusicViewModel", "Error in playSong", e)
-                _playbackError.value = "Playback Error: ${e.message}"
                 _isBuffering.value = false
                 _isPlaying.value = false
                 isPreparingManually = false
@@ -499,20 +420,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val currentIndex = queueManager.getCurrentIndex()
         if (queue.isNotEmpty()) {
             prefetchJob = viewModelScope.launch {
-                delay(1500) // Wait for current playback to stabilize
-                
-                // Prefetch ONLY the next track
+                delay(1500)
                 val nextIndex = currentIndex + 1
                 if (nextIndex < queue.size) {
                     val track = queue[nextIndex]
                     if (!urlCache.containsKey(track.id)) {
-                        android.util.Log.d("MusicViewModel", "Prefetching Next Only: ${track.title}")
                         YouTubeExtractor.getAudioUrl(track.id)?.let { url ->
                             urlCache[track.id] = url
-                            
-                            // Background Preparation: Add to ExoPlayer queue if possible
                             _controller?.let { controller ->
-                                if (controller.mediaItemCount == 1) { // Only if nothing else is queued
+                                if (controller.mediaItemCount == 1) {
                                     val nextItem = MediaItem.Builder()
                                         .setMediaId(track.id)
                                         .setUri(url)
@@ -535,15 +451,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
 
     fun togglePlayPause() {
-        val controller = _controller
-        if (controller != null) {
-            lastManualPlayTime = System.currentTimeMillis() // Shield state from controller flicker
-            if (controller.isPlaying) {
-                controller.pause()
+        _controller?.let {
+            lastManualPlayTime = System.currentTimeMillis()
+            if (it.isPlaying) {
+                it.pause()
                 _isPlaying.value = false
             } else {
-                if (controller.mediaItemCount == 0 && _currentMediaItem.value != null) {
-                    // Restored item case
+                if (it.mediaItemCount == 0 && _currentMediaItem.value != null) {
                     val restoredItem = _currentMediaItem.value!!
                     val position = _currentPosition.value
                     playSong(
@@ -552,14 +466,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         artist = restoredItem.mediaMetadata.artist?.toString() ?: "Unknown",
                         artworkUrl = restoredItem.mediaMetadata.artworkUri?.toString() ?: ""
                     )
-                    // Wait for prepare and seek? playSong already does prepare/play.
-                    // I should probably add seek to playSong or handle it here.
                     viewModelScope.launch {
                         delay(500)
                         seekTo(position)
                     }
                 } else {
-                    controller.play()
+                    it.play()
                     _isPlaying.value = true
                 }
             }
@@ -574,18 +486,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun seekTo(position: Long) {
-        _controller?.let {
-            android.util.Log.d("MusicViewModel", "seekTo: $position")
-            it.seekTo(position)
-        }
+        _controller?.let { it.seekTo(position) }
     }
 
-    fun skipNext(userTier: Int = 0) {
+    fun skipNext() {
         val controller = _controller ?: return
         val nextTrack = queueManager.getNextTrack()
         
         if (nextTrack != null) {
-            // Check if controller already has this item as next
             val nextIndex = controller.nextMediaItemIndex
             if (nextIndex != C.INDEX_UNSET) {
                 val nextItem = controller.getMediaItemAt(nextIndex)
@@ -594,18 +502,17 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     return
                 }
             }
-            playSong(nextTrack.id, nextTrack.title, nextTrack.artist, nextTrack.thumbnailUrl, userTier = userTier)
+            playSong(nextTrack.id, nextTrack.title, nextTrack.artist, nextTrack.thumbnailUrl)
         } else {
              controller.seekToNext()
         }
     }
 
-    fun skipPrevious(userTier: Int = 0) {
+    fun skipPrevious() {
         val controller = _controller ?: return
         val prevTrack = queueManager.getPreviousTrack()
         
         if (prevTrack != null) {
-            // Check if controller already has this item as previous
             val prevIndex = controller.previousMediaItemIndex
             if (prevIndex != C.INDEX_UNSET) {
                 val prevItem = controller.getMediaItemAt(prevIndex)
@@ -614,31 +521,17 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     return
                 }
             }
-            playSong(prevTrack.id, prevTrack.title, prevTrack.artist, prevTrack.thumbnailUrl, userTier = userTier)
+            playSong(prevTrack.id, prevTrack.title, prevTrack.artist, prevTrack.thumbnailUrl)
         } else {
             controller.seekToPrevious()
         }
     }
 
-    fun playNext(track: TrackEntity) {
-        queueManager.playNext(track)
-    }
-
-    fun addToQueue(track: TrackEntity) {
-        queueManager.addToQueue(track)
-    }
-
-    fun insertIntoQueue(index: Int, track: TrackEntity) {
-        queueManager.insertAt(index, track)
-    }
-
-    fun removeFromQueue(index: Int) {
-        queueManager.removeAt(index)
-    }
-
-    fun moveInQueue(from: Int, to: Int) {
-        queueManager.moveTrack(from, to)
-    }
+    fun playNext(track: TrackEntity) { queueManager.playNext(track) }
+    fun addToQueue(track: TrackEntity) { queueManager.addToQueue(track) }
+    fun insertIntoQueue(index: Int, track: TrackEntity) { queueManager.insertAt(index, track) }
+    fun removeFromQueue(index: Int) { queueManager.removeAt(index) }
+    fun moveInQueue(from: Int, to: Int) { queueManager.moveTrack(from, to) }
 
     fun clearQueue() {
         queueManager.clearQueue()
@@ -655,8 +548,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             val nextMode = !it.shuffleModeEnabled
             it.shuffleModeEnabled = nextMode
             _shuffleModeEnabled.value = nextMode
-            android.util.Log.d("MusicViewModel", "toggleShuffle: $nextMode")
-        } ?: android.util.Log.e("MusicViewModel", "toggleShuffle: controller is null")
+        }
     }
 
     fun toggleRepeatMode() {
@@ -668,18 +560,17 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }
             it.repeatMode = nextMode
             _repeatMode.value = nextMode
-            android.util.Log.d("MusicViewModel", "toggleRepeatMode: $nextMode")
-        } ?: android.util.Log.e("MusicViewModel", "toggleRepeatMode: controller is null")
+        }
     }
 
-    fun downloadTrack(track: TrackEntity, quality: String = "High", userTier: Int = 0, networkType: Int = 0) {
+    fun downloadTrack(track: TrackEntity, quality: String = "High", networkType: Int = 0) {
         viewModelScope.launch {
             try {
                 val url = withContext(Dispatchers.IO) {
                     YouTubeExtractor.getAudioUrl(track.id, quality)
                 }
                 if (url != null) {
-                    downloadManager.downloadSong(track, url, quality, userTier, networkType)
+                    downloadManager.downloadSong(track, url, quality, networkType)
                 } else {
                     _playbackError.value = "Failed to get download URL"
                 }
@@ -701,7 +592,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 val state = LyricsManager.getLyrics(videoId, title, artist)
                 _lyrics.value = state
             } catch (e: Exception) {
-                android.util.Log.e("MusicViewModel", "Error fetching lyrics", e)
                 _lyrics.value = LyricsState(error = "Could not load lyrics.")
             } finally {
                 _isFetchingLyrics.value = false
@@ -714,7 +604,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (currentIndex >= queue.size - 1) return
         
         val nextTrack = queue[currentIndex + 1]
-        // Check if already in controller queue
         var alreadyQueued = false
         for (i in 0 until controller.mediaItemCount) {
             if (controller.getMediaItemAt(i).mediaId == nextTrack.id) {
@@ -738,8 +627,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
         override fun onCleared() {
         super.onCleared()
-        controllerFuture?.let {
-            MediaController.releaseFuture(it)
-        }
+        controllerFuture?.let { MediaController.releaseFuture(it) }
     }
 }

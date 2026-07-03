@@ -200,7 +200,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector,
 val MotionSmall = 150
 val MotionMedium = 250
 val MotionLarge = 350
-val PremiumEasing = FastOutSlowInEasing
+val MelodifyEasing = FastOutSlowInEasing
 
 @Composable
 fun MainScreen(
@@ -212,14 +212,11 @@ fun MainScreen(
     val libraryViewModel: LibraryViewModel = viewModel()
     val navController = rememberNavController()
     
-    val userTier by loginViewModel.userTier.collectAsState()
-    val subMonths by loginViewModel.subMonths.collectAsState()
     val userEmail by loginViewModel.userEmail.collectAsState()
     val downloadNetworkType by loginViewModel.downloadNetworkType.collectAsState()
 
     var trackToDownload by remember { mutableStateOf<TrackEntity?>(null) }
     var trackToAddToPlaylist by remember { mutableStateOf<TrackEntity?>(null) }
-    var showLimitDialog by remember { mutableStateOf<String?>(null) }
     var showDownloadFlyAnimation by remember { mutableStateOf<TrackEntity?>(null) }
     
     // Auto-sync when account changes
@@ -261,9 +258,8 @@ fun MainScreen(
     val queuedTracks by musicViewModel.queuedTracks.collectAsState()
 
     val onSongPlay: (TrackEntity, List<TrackEntity>) -> Unit = { track, list ->
-        val canCache = loginViewModel.canCacheLyrics()
         isPlayerFull = true
-        musicViewModel.playSong(track.id, track.title, track.artist, track.thumbnailUrl, list, userTier, canCache)
+        musicViewModel.playSong(track.id, track.title, track.artist, track.thumbnailUrl, list)
         showMiniPlayer = true
     }
 
@@ -322,26 +318,6 @@ fun MainScreen(
         )
     }
 
-    if (showLimitDialog != null) {
-        AlertDialog(
-            onDismissRequest = { showLimitDialog = null },
-            containerColor = Color(0xFF1D1D27),
-            title = { Text("Premium Feature", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { 
-                Text(
-                    if (showLimitDialog == "Download") "Offline downloads are available for Melodify PRO members only. Upgrade now to listen anywhere!"
-                    else "Free users can use 8D Spatial Audio for 1 minute per session. Go PRO for uninterrupted 3D sound.",
-                    color = Color.Gray
-                )
-            },
-            confirmButton = {
-                Button(onClick = { showLimitDialog = null; navController.navigate(Screen.Settings.route) }) {
-                    Text("Upgrade Now")
-                }
-            }
-        )
-    }
-
     if (trackToDownload != null) {
         var downloadUsingCellular by remember { mutableStateOf(downloadNetworkType != 0) }
         AlertDialog(
@@ -360,24 +336,18 @@ fun MainScreen(
                     Text("Download", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                     
                     QualityOptionRow("Normal (Recommended)", "Low", currentQuality = audioQuality) {
-                        if (loginViewModel.useDownload()) {
-                            musicViewModel.downloadTrack(trackToDownload!!, "Low", userTier, if(downloadUsingCellular) 1 else 0)
-                            showDownloadFlyAnimation = trackToDownload
-                        }
+                        musicViewModel.downloadTrack(trackToDownload!!, "Low", if(downloadUsingCellular) 1 else 0)
+                        showDownloadFlyAnimation = trackToDownload
                         trackToDownload = null
                     }
                     QualityOptionRow("High", "Medium", currentQuality = audioQuality) {
-                        if (loginViewModel.useDownload()) {
-                            musicViewModel.downloadTrack(trackToDownload!!, "Medium", userTier, if(downloadUsingCellular) 1 else 0)
-                            showDownloadFlyAnimation = trackToDownload
-                        }
+                        musicViewModel.downloadTrack(trackToDownload!!, "Medium", if(downloadUsingCellular) 1 else 0)
+                        showDownloadFlyAnimation = trackToDownload
                         trackToDownload = null
                     }
                     QualityOptionRow("Very high", "High", currentQuality = audioQuality) {
-                        if (loginViewModel.useDownload()) {
-                            musicViewModel.downloadTrack(trackToDownload!!, "High", userTier, if(downloadUsingCellular) 1 else 0)
-                            showDownloadFlyAnimation = trackToDownload
-                        }
+                        musicViewModel.downloadTrack(trackToDownload!!, "High", if(downloadUsingCellular) 1 else 0)
+                        showDownloadFlyAnimation = trackToDownload
                         trackToDownload = null
                     }
 
@@ -443,11 +413,7 @@ fun MainScreen(
                                 onSongPlay = { track, results -> onSongPlay(track, results) },
                                 downloadStates = downloadStates,
                                 onDownloadClick = { track ->
-                                    if (loginViewModel.canDownload()) {
-                                        trackToDownload = track
-                                    } else {
-                                        showLimitDialog = "Download"
-                                    }
+                                    trackToDownload = track
                                 },
                                 onCancelDownload = { id -> musicViewModel.cancelDownload(id) },
                                 onAddToPlaylist = { track -> trackToAddToPlaylist = track }
@@ -459,11 +425,7 @@ fun MainScreen(
                                 downloadStates = downloadStates,
                                 queuedTracks = queuedTracks,
                                 onDownloadClick = { track ->
-                                    if (loginViewModel.canDownload()) {
-                                        trackToDownload = track
-                                    } else {
-                                        showLimitDialog = "Download"
-                                    }
+                                    trackToDownload = track
                                 },
                                 onCancelDownload = { id -> musicViewModel.cancelDownload(id) },
                                 onAddToPlaylist = { track -> trackToAddToPlaylist = track },
@@ -488,11 +450,7 @@ fun MainScreen(
                                 onBack = { navController.popBackStack() },
                                 downloadStates = downloadStates,
                                 onDownloadClick = { track ->
-                                    if (loginViewModel.canDownload()) {
-                                        trackToDownload = track
-                                    } else {
-                                        showLimitDialog = "Download"
-                                    }
+                                    trackToDownload = track
                                 },
                                 onCancelDownload = { id -> musicViewModel.cancelDownload(id) }
                             )
@@ -508,11 +466,7 @@ fun MainScreen(
                                 onBack = { navController.popBackStack() },
                                 downloadStates = downloadStates,
                                 onDownloadClick = { track ->
-                                    if (loginViewModel.canDownload()) {
-                                        trackToDownload = track
-                                    } else {
-                                        showLimitDialog = "Download"
-                                    }
+                                    trackToDownload = track
                                 },
                                 onCancelDownload = { id -> musicViewModel.cancelDownload(id) }
                             )
@@ -526,8 +480,6 @@ fun MainScreen(
                                  musicViewModel = musicViewModel,
                                 loginViewModel = loginViewModel,
                                 navController = navController,
-                                userTier = userTier,
-                                subMonths = subMonths,
                                 onLogout = {
                                     musicViewModel.resetPlayer()
                                     loginViewModel.logout(context)
@@ -555,11 +507,11 @@ fun MainScreen(
                         visible = !isPlayerFull,
                         enter = slideInVertically(
                             initialOffsetY = { it },
-                            animationSpec = tween(MotionMedium, easing = PremiumEasing)
+                            animationSpec = tween(MotionMedium, easing = MelodifyEasing)
                         ) + fadeIn(tween(MotionSmall)),
                         exit = slideOutVertically(
                             targetOffsetY = { it },
-                            animationSpec = tween(MotionMedium, easing = PremiumEasing)
+                            animationSpec = tween(MotionMedium, easing = MelodifyEasing)
                         ) + fadeOut(tween(MotionSmall)),
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -585,11 +537,11 @@ fun MainScreen(
                 visible = isPlayerFull,
                 enter = slideInVertically(
                     initialOffsetY = { it },
-                    animationSpec = tween(MotionLarge, easing = PremiumEasing)
+                    animationSpec = tween(MotionLarge, easing = MelodifyEasing)
                 ) + fadeIn(tween(MotionMedium)),
                 exit = slideOutVertically(
                     targetOffsetY = { it },
-                    animationSpec = tween(MotionLarge, easing = PremiumEasing)
+                    animationSpec = tween(MotionLarge, easing = MelodifyEasing)
                 ) + fadeOut(tween(MotionMedium))
             ) {
                 currentMediaItem?.let { mediaItem ->
@@ -604,7 +556,6 @@ fun MainScreen(
                         shuffleModeEnabled = shuffleModeEnabled,
                         repeatMode = repeatMode,
                         lyrics = lyrics,
-                        userTier = userTier,
                         downloadState = downloadStates[mediaItem.mediaId],
                         onDownloadClick = {
                             trackToDownload = TrackEntity(
@@ -627,10 +578,10 @@ fun MainScreen(
                             musicViewModel.setVolume(it)
                         },
                         onSkipNext = { 
-                            musicViewModel.skipNext(userTier) 
+                            musicViewModel.skipNext() 
                         },
                         onSkipPrevious = { 
-                            musicViewModel.skipPrevious(userTier) 
+                            musicViewModel.skipPrevious() 
                         },
                         onToggleShuffle = { 
                             musicViewModel.toggleShuffle() 
@@ -2142,8 +2093,6 @@ fun SettingsScreen(
     musicViewModel: MusicViewModel,
     loginViewModel: LoginViewModel,
     navController: NavController,
-    userTier: Int,
-    subMonths: Int,
     onLogout: () -> Unit
 ) {
     val context = LocalContext.current
@@ -2192,15 +2141,11 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             // --- PROFILE SECTION ---
-            val dailyDownloadsUsed by loginViewModel.dailyDownloadsUsed.collectAsState()
             
-            PremiumHeroCard(
+            ProfileHeroCard(
                 userName = userName ?: "Guest User",
                 userEmail = userEmail ?: "No email linked",
                 userPhoto = userPhoto,
-                userTier = userTier,
-                subMonths = subMonths,
-                dailyDownloadsUsed = dailyDownloadsUsed,
                 isDarkTheme = isDarkTheme,
                 onClick = { showEditProfileDialog = true }
             )
@@ -2403,13 +2348,10 @@ fun SettingsScreen(
 }
 
 @Composable
-fun PremiumHeroCard(
+fun ProfileHeroCard(
     userName: String,
     userEmail: String,
     userPhoto: String?,
-    userTier: Int,
-    subMonths: Int,
-    dailyDownloadsUsed: Int,
     isDarkTheme: Boolean,
     onClick: () -> Unit
 ) {
@@ -2474,22 +2416,6 @@ fun PremiumHeroCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Surface(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(12.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
-                    ) {
-                        Text(
-                            text = "✨ Melodify PRO",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
-                    }
                 }
 
                 Icon(
@@ -2657,7 +2583,7 @@ fun AboutMelodifyScreen(onBack: () -> Unit) {
                 color = Color.White
             )
             Text(
-                "v1.0.0 Stable",
+                "v2.0.0 Stable",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.Gray
             )
@@ -2671,7 +2597,7 @@ fun AboutMelodifyScreen(onBack: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(24.dp)) {
                     Text(
-                        "Melodify is a premium music experience designed for those who value quality and simplicity.",
+                        "Melodify is a high-fidelity music experience designed for those who value quality and simplicity.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = Color.White,
                         textAlign = TextAlign.Center,
@@ -2695,21 +2621,6 @@ fun AboutMelodifyScreen(onBack: () -> Unit) {
                     )
                 }
             }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            Text(
-                "Subscription Plans",
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                fontSize = 18.sp,
-                modifier = Modifier.align(Alignment.Start).padding(start = 8.dp)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            UpgradeOption("PRO Monthly", "₹49", "Basic Pro features for 1 month", Color(0xFFE91E63)) {}
-            Spacer(modifier = Modifier.height(8.dp))
-            UpgradeOption("PRO Annual", "₹199", "Best value with Animated Badge", Color(0xFFFFD700)) {}
             
             Spacer(modifier = Modifier.height(40.dp))
             
@@ -3119,18 +3030,18 @@ fun MiniPlayer(
 
 @Composable
 fun PlayerScreen(
-    mediaItem: androidx.media3.common.MediaItem, isPlaying: Boolean, isBuffering: Boolean, currentPosition: Long, duration: Long, isLiked: Boolean, volume: Float, shuffleModeEnabled: Boolean, repeatMode: Int, lyrics: LyricsState, userTier: Int, downloadState: DownloadState?, onDownloadClick: () -> Unit, onCancelDownload: () -> Unit, onTogglePlay: () -> Unit, onSeek: (Long) -> Unit, onVolumeChange: (Float) -> Unit, onSkipNext: () -> Unit, onSkipPrevious: () -> Unit, onToggleShuffle: () -> Unit, onToggleRepeat: () -> Unit, onClose: () -> Unit, onToggleLike: () -> Unit, onOpenQueue: () -> Unit, onOpenSettings: () -> Unit, onAddToPlaylist: () -> Unit
+    mediaItem: androidx.media3.common.MediaItem, isPlaying: Boolean, isBuffering: Boolean, currentPosition: Long, duration: Long, isLiked: Boolean, volume: Float, shuffleModeEnabled: Boolean, repeatMode: Int, lyrics: LyricsState, downloadState: DownloadState?, onDownloadClick: () -> Unit, onCancelDownload: () -> Unit, onTogglePlay: () -> Unit, onSeek: (Long) -> Unit, onVolumeChange: (Float) -> Unit, onSkipNext: () -> Unit, onSkipPrevious: () -> Unit, onToggleShuffle: () -> Unit, onToggleRepeat: () -> Unit, onClose: () -> Unit, onToggleLike: () -> Unit, onOpenQueue: () -> Unit, onOpenSettings: () -> Unit, onAddToPlaylist: () -> Unit
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
         if (isLandscape) {
             PlayerLandscape(
-                mediaItem, isPlaying, isBuffering, currentPosition, duration, isLiked, volume, shuffleModeEnabled, repeatMode, lyrics, userTier, downloadState, onDownloadClick, onCancelDownload, onTogglePlay, onSeek, onVolumeChange, onSkipNext, onSkipPrevious, onToggleShuffle, onToggleRepeat, onClose, onToggleLike, onOpenQueue, onOpenSettings, onAddToPlaylist
+                mediaItem, isPlaying, isBuffering, currentPosition, duration, isLiked, volume, shuffleModeEnabled, repeatMode, lyrics, downloadState, onDownloadClick, onCancelDownload, onTogglePlay, onSeek, onVolumeChange, onSkipNext, onSkipPrevious, onToggleShuffle, onToggleRepeat, onClose, onToggleLike, onOpenQueue, onOpenSettings, onAddToPlaylist
             )
         } else {
             PlayerPortrait(
-                mediaItem, isPlaying, isBuffering, currentPosition, duration, isLiked, volume, shuffleModeEnabled, repeatMode, lyrics, userTier, downloadState, onDownloadClick, onCancelDownload, onTogglePlay, onSeek, onVolumeChange, onSkipNext, onSkipPrevious, onToggleShuffle, onToggleRepeat, onClose, onToggleLike, onOpenQueue, onOpenSettings, onAddToPlaylist
+                mediaItem, isPlaying, isBuffering, currentPosition, duration, isLiked, volume, shuffleModeEnabled, repeatMode, lyrics, downloadState, onDownloadClick, onCancelDownload, onTogglePlay, onSeek, onVolumeChange, onSkipNext, onSkipPrevious, onToggleShuffle, onToggleRepeat, onClose, onToggleLike, onOpenQueue, onOpenSettings, onAddToPlaylist
             )
         }
     }
@@ -3149,7 +3060,6 @@ fun PlayerPortrait(
     shuffleModeEnabled: Boolean,
     repeatMode: Int,
     lyrics: LyricsState,
-    userTier: Int,
     downloadState: DownloadState?,
     onDownloadClick: () -> Unit,
     onCancelDownload: () -> Unit,
@@ -3483,7 +3393,7 @@ fun PlayerPortrait(
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun PlayerLandscape(
-    mediaItem: androidx.media3.common.MediaItem, isPlaying: Boolean, isBuffering: Boolean, currentPosition: Long, duration: Long, isLiked: Boolean, volume: Float, shuffleModeEnabled: Boolean, repeatMode: Int, lyrics: LyricsState, userTier: Int, downloadState: DownloadState?, onDownloadClick: () -> Unit, onCancelDownload: () -> Unit, onTogglePlay: () -> Unit, onSeek: (Long) -> Unit, onVolumeChange: (Float) -> Unit, onSkipNext: () -> Unit, onSkipPrevious: () -> Unit, onToggleShuffle: () -> Unit, onToggleRepeat: () -> Unit, onClose: () -> Unit, onToggleLike: () -> Unit, onOpenQueue: () -> Unit, onOpenSettings: () -> Unit, onAddToPlaylist: () -> Unit
+    mediaItem: androidx.media3.common.MediaItem, isPlaying: Boolean, isBuffering: Boolean, currentPosition: Long, duration: Long, isLiked: Boolean, volume: Float, shuffleModeEnabled: Boolean, repeatMode: Int, lyrics: LyricsState, downloadState: DownloadState?, onDownloadClick: () -> Unit, onCancelDownload: () -> Unit, onTogglePlay: () -> Unit, onSeek: (Long) -> Unit, onVolumeChange: (Float) -> Unit, onSkipNext: () -> Unit, onSkipPrevious: () -> Unit, onToggleShuffle: () -> Unit, onToggleRepeat: () -> Unit, onClose: () -> Unit, onToggleLike: () -> Unit, onOpenQueue: () -> Unit, onOpenSettings: () -> Unit, onAddToPlaylist: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
     val pagerState = rememberPagerState(initialPage = 1, pageCount = { 3 })
@@ -3995,23 +3905,6 @@ fun LyricsScreen(lyrics: String?, isFetching: Boolean, contentColor: Color) {
         }
     }
 }
-
-@Composable
-fun SubscriptionGate(tierName: String, onUpgrade: () -> Unit = {}) {
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .padding(24.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(64.dp), tint = Color.Gray)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Premium Feature", style = MaterialTheme.typography.titleLarge, color = Color.White)
-            Text("This feature is available for $tierName members only.", textAlign = TextAlign.Center, color = Color.Gray)
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(onClick = onUpgrade) { Text("Upgrade in Settings") }
-        }
-    }
-}
-
 
 @Composable
 fun DownloadFlyAnimation(track: TrackEntity, onAnimationFinished: () -> Unit) {

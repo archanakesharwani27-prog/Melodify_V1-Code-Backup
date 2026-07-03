@@ -1,25 +1,23 @@
 package com.ansh.ytmusicpreimum.ui
 
-import android.app.Activity
 import android.app.Application
 import android.content.Context
+import android.os.Bundle
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ansh.ytmusicpreimum.data.AppDatabase
+import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.PhoneAuthCredential
-import com.google.firebase.auth.PhoneAuthOptions
-import com.google.firebase.auth.PhoneAuthProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import java.util.concurrent.TimeUnit
 
 class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val sharedPrefs = application.getSharedPreferences("auth", Context.MODE_PRIVATE)
     private var auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private val firebaseAnalytics = FirebaseAnalytics.getInstance(application)
     private val trackDao = AppDatabase.getDatabase(application).trackDao()
     
     init {
@@ -29,27 +27,10 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLoggedIn = MutableStateFlow(sharedPrefs.getBoolean("is_logged_in", false))
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn
 
-    // All users are PRO by default now
-    private val _userTier = MutableStateFlow(2)
-    val userTier: StateFlow<Int> = _userTier
-
-    // Freemium Limits
-    private val _freeDownloadsLeft = MutableStateFlow(sharedPrefs.getInt("free_downloads", 5))
-    val freeDownloadsLeft: StateFlow<Int> = _freeDownloadsLeft
-
     private val _dailyDownloadsUsed = MutableStateFlow(sharedPrefs.getInt("daily_downloads_used", 0))
     val dailyDownloadsUsed: StateFlow<Int> = _dailyDownloadsUsed
 
-    private val _lyricsCount = MutableStateFlow(sharedPrefs.getInt("lyrics_count", 0))
-    val lyricsCount: StateFlow<Int> = _lyricsCount
-
-    private val _eightDCount = MutableStateFlow(sharedPrefs.getInt("eight_d_count", 0))
     private val _lastLimitReset = MutableStateFlow(sharedPrefs.getLong("last_limit_reset", 0L))
-
-    private val _subMonths = MutableStateFlow(sharedPrefs.getInt("sub_months", 0))
-    val subMonths: StateFlow<Int> = _subMonths
-
-    private val _subDate = MutableStateFlow(sharedPrefs.getLong("sub_date", 0L))
     
     private val _userName = MutableStateFlow(sharedPrefs.getString("user_name", ""))
     val userName: StateFlow<String?> = _userName
@@ -60,11 +41,10 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val _userPhotoUrl = MutableStateFlow(sharedPrefs.getString("user_photo", ""))
     val userPhotoUrl: StateFlow<String?> = _userPhotoUrl
 
-    // 0: Wifi only, 1: All Networks, 2: Mobile Data Only
+    // 0: Wifi only, 1: All Networks
     private val _downloadNetworkType = MutableStateFlow(sharedPrefs.getInt("download_network", 0))
     val downloadNetworkType: StateFlow<Int> = _downloadNetworkType
 
-    private val _verificationId = MutableStateFlow<String?>(null)
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
@@ -83,56 +63,23 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         
         if (calendar.get(java.util.Calendar.DAY_OF_YEAR) != lastResetCal.get(java.util.Calendar.DAY_OF_YEAR) ||
             calendar.get(java.util.Calendar.YEAR) != lastResetCal.get(java.util.Calendar.YEAR)) {
-            _eightDCount.value = 0
             _dailyDownloadsUsed.value = 0
             sharedPrefs.edit().apply {
-                putInt("eight_d_count", 0)
                 putInt("daily_downloads_used", 0)
                 putLong("last_limit_reset", now)
                 apply()
             }
             _lastLimitReset.value = now
         }
-
-        if (calendar.get(java.util.Calendar.MONTH) != lastResetCal.get(java.util.Calendar.MONTH) ||
-            calendar.get(java.util.Calendar.YEAR) != lastResetCal.get(java.util.Calendar.YEAR)) {
-            _freeDownloadsLeft.value = 5 
-            _lyricsCount.value = 0
-            sharedPrefs.edit().apply {
-                putInt("free_downloads", 5)
-                putInt("lyrics_count", 0)
-                apply()
-            }
-        }
     }
 
-    fun canDownload(): Boolean {
-        return true
-    }
-
-    fun useDownload(): Boolean {
-        return true
-    }
-
-    fun isBackgroundPlaybackAllowed(): Boolean {
-        // Requirement: Gmail (or any authenticated) login required for background playback
-        return _isLoggedIn.value && !isGuestUser
-    }
-
-    fun canUse8D(): Boolean {
-        return true
-    }
-
-    fun canCacheLyrics(): Boolean {
-        return true
-    }
-
-    fun upgradeTier(tier: Int, months: Int) {
-        // No-op: Everyone is PRO
-    }
+    fun canDownload(): Boolean = true
+    fun useDownload(): Boolean = true
+    fun canUse8D(): Boolean = true
+    fun canCacheLyrics(): Boolean = true
+    fun userTier(): Int = 2
 
     fun shouldShowNameIntro(): Boolean {
-        // Feature unlocked for everyone: Always show if name is present
         return _userName.value?.isNotEmpty() == true
     }
 
@@ -142,6 +89,19 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         _userName.value = name
         _userEmail.value = email
         _userPhotoUrl.value = photoUrl
+
+        // LOG ANALYTICS EVENT
+        try {
+            val bundle = Bundle().apply {
+                putString(FirebaseAnalytics.Param.METHOD, if (email == "guest@melodify.com") "guest" else "account")
+                putString("user_name", name)
+                putString("user_email", email)
+            }
+            firebaseAnalytics.logEvent(FirebaseAnalytics.Event.LOGIN, bundle)
+            firebaseAnalytics.setUserId(email?.replace(".", "_"))
+        } catch (e: Exception) {
+            android.util.Log.e("Analytics", "Failed to log login event", e)
+        }
     }
 
     private fun saveUserToPrefs(name: String?, email: String?, photoUrl: String?) {
@@ -164,7 +124,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch(e: Exception) {}
             
-            // Clear local database
             trackDao.clearTracks()
             trackDao.clearPlaylists()
             trackDao.clearPlaylistCrossRefs()
@@ -173,8 +132,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             sharedPrefs.edit().clear().apply()
             
             _isLoggedIn.value = false
-            _userTier.value = 2 // Keep PRO even on logout
-            _subMonths.value = 0
             _userName.value = ""
             _userEmail.value = ""
             _userPhotoUrl.value = ""
@@ -187,6 +144,10 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             _isLoading.value = false
             if (task.isSuccessful) {
                 onLoginSuccess(name, email, null)
+                val bundle = Bundle().apply {
+                    putString(FirebaseAnalytics.Param.METHOD, "email")
+                }
+                firebaseAnalytics.logEvent(FirebaseAnalytics.Event.SIGN_UP, bundle)
             } else {
                 Toast.makeText(getApplication(), "Signup failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
             }
@@ -204,13 +165,6 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                 Toast.makeText(getApplication(), "Login failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
             }
         }
-    }
-
-    fun sendOtp(phoneNumber: String, activity: Activity, onOtpSent: () -> Unit) {
-        Toast.makeText(getApplication(), "Phone OTP is currently disabled.", Toast.LENGTH_SHORT).show()
-    }
-
-    fun verifyOtp(otp: String) {
     }
 
     fun updateProfile(name: String, photoUrl: String?) {

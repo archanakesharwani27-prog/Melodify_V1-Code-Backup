@@ -18,7 +18,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
 
 enum class DownloadStatus {
@@ -49,14 +48,14 @@ class MelodifyDownloadManager(private val context: Context) {
     
     data class DownloadRequest(val track: TrackEntity, val url: String, val quality: String)
     
-    private var maxConcurrentDownloads = 1
+    private val maxConcurrentDownloads = 5
     private var currentNetworkPreference: Int = 0
 
     init {
         createNotificationChannel()
     }
 
-    fun downloadSong(track: TrackEntity, audioUrl: String, quality: String, userTier: Int = 0, networkType: Int = 0) {
+    fun downloadSong(track: TrackEntity, audioUrl: String, quality: String, networkType: Int = 0) {
         if (activeJobs.containsKey(track.id) || downloadQueue.any { it.track.id == track.id }) return
         
         currentNetworkPreference = networkType
@@ -66,12 +65,10 @@ class MelodifyDownloadManager(private val context: Context) {
             return
         }
 
-        maxConcurrentDownloads = if (userTier >= 2) 5 else 2
-        
         _queuedTracks.value += track
         downloadQueue.add(DownloadRequest(track, audioUrl, quality))
         
-        processQueue(userTier)
+        processQueue()
     }
 
     private fun isNetworkAllowed(preferredType: Int): Boolean {
@@ -87,7 +84,7 @@ class MelodifyDownloadManager(private val context: Context) {
         }
     }
 
-    private fun processQueue(userTier: Int) {
+    private fun processQueue() {
         if (activeJobs.size >= maxConcurrentDownloads) return
         if (downloadQueue.isEmpty()) return
         if (!isNetworkAllowed(currentNetworkPreference)) return
@@ -124,7 +121,7 @@ class MelodifyDownloadManager(private val context: Context) {
                     val inputStream = body.byteStream()
                     val outputStream = FileOutputStream(file)
                     
-                    val bufferSize = if (userTier >= 2) 65536 else 8192 
+                    val bufferSize = 65536 
                     val buffer = ByteArray(bufferSize)
                     
                     var bytesRead: Int
@@ -142,7 +139,7 @@ class MelodifyDownloadManager(private val context: Context) {
                             val now = System.currentTimeMillis()
                             if (now - lastProgressUpdate > 500) { // Update every 500ms
                                 val progress = currentBytes.toFloat() / totalBytes.toFloat()
-                            _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.DOWNLOADING, progress, totalMb, quality)) }
+                                _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.DOWNLOADING, progress, totalMb, quality)) }
                                 updateOngoingNotification(track, (progress * 100).toInt())
                                 lastProgressUpdate = now
                             }
@@ -169,7 +166,7 @@ class MelodifyDownloadManager(private val context: Context) {
                 cancelOngoingNotification(track.id)
             } finally {
                 activeJobs.remove(track.id)
-                processQueue(userTier)
+                processQueue()
             }
         }
         activeJobs[track.id] = job
@@ -217,10 +214,6 @@ class MelodifyDownloadManager(private val context: Context) {
     private fun cancelOngoingNotification(trackId: String) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(trackId.hashCode())
-    }
-
-    private fun showDownloadNotification(title: String) {
-        // Legacy, using showDownloadCompleteNotification instead
     }
 
     private fun createNotificationChannel() {
