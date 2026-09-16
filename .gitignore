@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+**/build/
+gradle-home/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Log & temp
+*.log
+captures/
+.claude/
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+
+# Android build outputs
+*.apk
+*.aab
+*.dex
+*.class

@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "854004439119",
+    "project_id": "melodify-d339b",
+    "storage_bucket": "melodify-d339b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:854004439119:android:26e4a95cb0bf6029edf23a",
+        "android_client_info": {
+          "package_name": "com.melodify.melodifyapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "854004439119-qpuckh8bog6kb3rgfuv04gk0ij1564pf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.melodify.melodifyapp",
+            "certificate_hash": "78bdc95f5be94a3c3459947f39af218983ab9ca8"
+          }
+        },
+        {
+          "client_id": "854004439119-vtfd5l5rfet0rviabr9uqe3d4rbgucj1.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCOeSBve1N7kU9Kw89kg6nMtyyWz7DpcwM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "854004439119-vtfd5l5rfet0rviabr9uqe3d4rbgucj1.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
