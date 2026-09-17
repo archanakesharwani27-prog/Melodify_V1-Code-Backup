@@ -20,7 +20,9 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "aura_player_database"
                 )
-                .fallbackToDestructiveMigration()
+                // Prevent wiping user playlists, downloads, and favorites on version upgrades.
+                // Destructive migration is only permitted on accidental database downgrades.
+                .fallbackToDestructiveMigrationOnDowngrade()
                 .build()
                 INSTANCE = instance
                 instance

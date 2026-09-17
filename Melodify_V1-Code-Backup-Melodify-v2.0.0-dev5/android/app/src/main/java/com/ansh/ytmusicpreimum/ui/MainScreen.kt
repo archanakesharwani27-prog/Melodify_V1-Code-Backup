@@ -82,6 +82,19 @@ fun MainScreen(
     }
     
     val context = LocalContext.current
+
+    // Android 13+ (API 33) Runtime Notification Permission
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+        val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+            contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+        ) { /* Notification permission result handled */ }
+        LaunchedEffect(Unit) {
+            val permission = android.Manifest.permission.POST_NOTIFICATIONS
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                permissionLauncher.launch(permission)
+            }
+        }
+    }
     val isPlaying by musicViewModel.isPlaying.collectAsState()
     val isBuffering by musicViewModel.isBuffering.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }

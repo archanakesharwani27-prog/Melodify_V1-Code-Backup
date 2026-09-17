@@ -59,3 +59,18 @@ Melodify is an Android music streaming and local player application built using 
   - Preserved Firebase Firestore serialization classes and property annotations.
   - Preserved NewPipe Extractor and AndroidX Media3 / ExoPlayer interfaces from obfuscation damage.
   - Preserved debug line numbers for crash analysis.
+
+### Phase 5: Security Hardening, Power & Rendering Performance (Completed)
+- **Hardcoded Secret Removal (P0 Security Fix)**:
+  - Deprecated legacy `YouTubeSearchService.kt` and eliminated exposed hardcoded Google API key (`AIzaSy...`).
+- **Database Wipe Protection (P0 Data Integrity Fix)**:
+  - Replaced reckless `.fallbackToDestructiveMigration()` in `AppDatabase.kt` with `.fallbackToDestructiveMigrationOnDowngrade()`, ensuring user playlists, favorites, and downloaded songs are never wiped on future schema version bumps.
+- **Audio Visualizer Battery & Garbage Collection Optimization**:
+  - Refactored `LiveWaveCanvas.kt` to eliminate 1,400+ per-second `Brush` and `List` allocations inside the canvas draw loop.
+  - Replaced continuous frame `FloatArray.copyOf()` allocations with in-place remembered array updates, drastically reducing CPU/GPU overhead and thermal throttling during playback.
+- **Android 13+ (API 33) Runtime Notification Permissions**:
+  - Implemented standard `POST_NOTIFICATIONS` runtime prompt in `MainScreen.kt`, ensuring foreground playback and download notifications appear reliably across Android 13, 14, and 15 devices.
+- **Compose Recomposition & FPS Boost**:
+  - Annotated core Room and domain models (`TrackEntity`, `PlaylistEntity`, `HistoryEntity`, etc.) with `@Immutable` so the Jetpack Compose compiler can skip list row recompositions during fast scrolling.
+- **Network-Aware Download Queue**:
+  - Integrated `ConnectivityManager.NetworkCallback` in `MelodifyDownloadManager.kt` to automatically pause downloads when off-network and resume processing seamlessly as soon as preferred network connectivity (e.g. Wi-Fi) is restored.

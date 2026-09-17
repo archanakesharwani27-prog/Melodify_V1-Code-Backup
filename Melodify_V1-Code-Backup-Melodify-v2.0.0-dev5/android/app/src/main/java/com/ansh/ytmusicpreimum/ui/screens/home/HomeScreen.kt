@@ -44,6 +44,7 @@ fun HomeScreen(
     onGenreClick: (String) -> Unit = {},
     onViewAll: (String) -> Unit = {},
     homeViewModel: HomeViewModel = viewModel(),
+    libraryViewModel: LibraryViewModel = viewModel(),
     musicViewModel: MusicViewModel = viewModel()
 ) {
     val trending by homeViewModel.trendingSongs.collectAsState()

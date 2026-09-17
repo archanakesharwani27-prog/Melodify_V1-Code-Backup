@@ -61,30 +61,51 @@ class MelodifyDownloadManager(private val context: Context) {
 
     private var maxConcurrentDownloads = 1
     private var currentNetworkPreference: Int = 0
+    private var currentUserTier: Int = 0
 
     init {
         createNotificationChannel()
+        registerNetworkCallback()
+    }
+
+    private fun registerNetworkCallback() {
+        try {
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            connectivityManager?.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    processQueue(currentUserTier)
+                }
+
+                override fun onCapabilitiesChanged(network: android.net.Network, capabilities: NetworkCapabilities) {
+                    processQueue(currentUserTier)
+                }
+            })
+        } catch (e: Exception) {
+            android.util.Log.e("MelodifyDownload", "Error registering network callback", e)
+        }
     }
 
     fun downloadSong(track: TrackEntity, audioUrl: String, quality: String, userTier: Int = 0, networkType: Int = 0) {
         if (activeJobs.containsKey(track.id) || downloadQueue.any { it.track.id == track.id }) return
 
         currentNetworkPreference = networkType
-
-        if (!isNetworkAllowed(networkType)) {
-            android.util.Log.w("MelodifyDownload", "Download not allowed on current network")
-            return
-        }
-
+        currentUserTier = userTier
         maxConcurrentDownloads = if (userTier >= 2) 5 else 2
 
         _queuedTracks.value += track
         downloadQueue.add(DownloadRequest(track, audioUrl, quality, retryCount = 0))
 
+        if (!isNetworkAllowed(networkType)) {
+            android.util.Log.i("MelodifyDownload", "Queued '${track.title}' waiting for preferred network connection")
+            _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.PAUSED, quality = quality)) }
+            return
+        }
+
         processQueue(userTier)
     }
 
     fun retryDownload(track: TrackEntity, quality: String, userTier: Int = 0, networkType: Int = 0) {
+        currentUserTier = userTier
         _downloadStates.update { it - track.id }
         scope.launch {
             val freshUrl = YouTubeExtractor.getAudioUrl(track.id, quality)

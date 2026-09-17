@@ -1,11 +1,13 @@
 package com.ansh.ytmusicpreimum.data
 
+import androidx.compose.runtime.Immutable
 import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.Junction
 import androidx.room.PrimaryKey
 import androidx.room.Relation
 
+@Immutable
 @Entity(tableName = "tracks")
 data class TrackEntity(
     @PrimaryKey val id: String = "",
@@ -21,6 +23,7 @@ data class TrackEntity(
     val addedDate: Long = System.currentTimeMillis()
 )
 
+@Immutable
 @Entity(tableName = "playlists")
 data class PlaylistEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -36,6 +39,7 @@ data class PlaylistTrackCrossRef(
     val position: Int = 0
 )
 
+@Immutable
 @Entity(tableName = "playback_history")
 data class HistoryEntity(
     @PrimaryKey val trackId: String = "",
@@ -45,6 +49,7 @@ data class HistoryEntity(
     var timestamp: Long = System.currentTimeMillis()
 )
 
+@Immutable
 @Entity(tableName = "search_history")
 data class SearchHistoryEntity(
     @PrimaryKey val query: String = "",
@@ -59,6 +64,7 @@ data class StreamCacheEntity(
     val quality: String
 )
 
+@Immutable
 @Entity(tableName = "queue")
 data class QueueEntity(
     @PrimaryKey val trackId: String = "",
@@ -86,6 +92,7 @@ data class EqualizerPresetEntity(
     val isCustom: Boolean = true
 )
 
+@Immutable
 data class PlaylistWithTracks(
     @Embedded val playlist: PlaylistEntity,
     @Relation(

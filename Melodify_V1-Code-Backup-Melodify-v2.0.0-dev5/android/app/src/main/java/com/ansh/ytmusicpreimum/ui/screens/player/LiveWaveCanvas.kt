@@ -19,8 +19,18 @@ fun LiveWaveCanvas(isPlaying: Boolean) {
     val barCount = 48
     
     val barHeights = remember { FloatArray(barCount) { 0.1f } }
+    val gradientBrush = remember {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFF00E5FF).copy(alpha = 0.9f), 
+                Color(0xFFE91E63).copy(alpha = 0.9f), 
+                Color(0xFF9C27B0).copy(alpha = 0.9f)
+            )
+        )
+    }
     
-    val smoothedFft = remember(fftData) {
+    // Process FFT frame in-place without memory reallocations
+    remember(fftData, isPlaying) {
         if (isPlaying && fftData.isNotEmpty()) {
             for (i in 0 until barCount) {
                 val fftIndex = (i * (fftData.size / 2) / barCount) * 2
@@ -41,7 +51,7 @@ fun LiveWaveCanvas(isPlaying: Boolean) {
                 barHeights[i] = barHeights[i] * 0.85f
             }
         }
-        barHeights.copyOf()
+        true
     }
 
     Surface(
@@ -63,17 +73,11 @@ fun LiveWaveCanvas(isPlaying: Boolean) {
             val baseAmplitude = height * 0.45f
 
             for (i in 0 until barCount) {
-                val animatedHeight = baseAmplitude * smoothedFft[i]
+                val animatedHeight = baseAmplitude * barHeights[i]
                 val x = i * (barWidth + spacing)
                 
                 drawRoundRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF00E5FF).copy(alpha = 0.9f), 
-                            Color(0xFFE91E63).copy(alpha = 0.9f), 
-                            Color(0xFF9C27B0).copy(alpha = 0.9f)
-                        )
-                    ), 
+                    brush = gradientBrush, 
                     topLeft = Offset(x, midY - animatedHeight), 
                     size = androidx.compose.ui.geometry.Size(barWidth, animatedHeight * 2), 
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2, barWidth / 2)
