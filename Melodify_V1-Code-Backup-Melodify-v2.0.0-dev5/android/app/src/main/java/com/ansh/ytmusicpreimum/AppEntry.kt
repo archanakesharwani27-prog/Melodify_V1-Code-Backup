@@ -18,6 +18,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ansh.ytmusicpreimum.ui.LoginScreen
 import com.ansh.ytmusicpreimum.ui.LoginViewModel
+import com.ansh.ytmusicpreimum.ui.MainScreen
+import com.ansh.ytmusicpreimum.ui.MusicViewModel
 import com.ansh.ytmusicpreimum.ui.SplashScreen
 import com.ansh.ytmusicpreimum.ui.theme.MelodifyTheme
 
