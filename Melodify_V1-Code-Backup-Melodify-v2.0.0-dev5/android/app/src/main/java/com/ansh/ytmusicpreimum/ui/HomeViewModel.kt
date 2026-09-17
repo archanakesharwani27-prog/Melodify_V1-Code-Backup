@@ -1,19 +1,38 @@
 package com.ansh.ytmusicpreimum.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.ansh.ytmusicpreimum.data.TrackEntity
 import com.ansh.ytmusicpreimum.YouTubeExtractor
+import com.ansh.ytmusicpreimum.data.AppDatabase
+import com.ansh.ytmusicpreimum.data.TrackEntity
 import com.ansh.ytmusicpreimum.data.TrackRepository
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
 
-class HomeViewModel : ViewModel() {
+data class HomeUiState(
+    val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
+    val error: String? = null,
+    val trending: List<TrackEntity> = emptyList(),
+    val forYou: List<TrackEntity> = emptyList(),
+    val moodMixes: List<Pair<String, List<TrackEntity>>> = emptyList(),
+    val curatedSections: List<Pair<String, List<TrackEntity>>> = emptyList()
+)
+
+class HomeViewModel(application: Application) : AndroidViewModel(application) {
+    private val database = AppDatabase.getDatabase(application)
+    private val repository = TrackRepository(database.trackDao())
+
+    private val _uiState = MutableStateFlow(HomeUiState())
+    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
     private val _trendingSongs = MutableStateFlow<List<TrackEntity>>(emptyList())
     val trendingSongs: StateFlow<List<TrackEntity>> = _trendingSongs
 
@@ -51,7 +70,7 @@ class HomeViewModel : ViewModel() {
             "Melodify Picks" -> curatedSections.value.find { it.first == "Melodify Picks" }?.second ?: emptyList()
             "Hidden Gems" -> curatedSections.value.find { it.first == "Hidden Gems" }?.second ?: emptyList()
             "Top India" -> globalHits.value.find { it.first == "Top India" }?.second ?: emptyList()
-            "Recently Played" -> emptyList() // Should be from LibraryViewModel
+            "Recently Played" -> emptyList()
             else -> {
                 moodMixes.value.find { it.first.contains(title, ignoreCase = true) }?.second
                     ?: evergreenEmotionalMixes.value.find { it.first.contains(title, ignoreCase = true) }?.second
@@ -64,13 +83,10 @@ class HomeViewModel : ViewModel() {
     }
 
     private var lastRefreshTime: Long = 0
-    private var repository: TrackRepository? = null
 
+    // Backward-compatibility stub
     fun setRepository(repo: TrackRepository) {
-        this.repository = repo
-        if (_trendingSongs.value.isEmpty()) {
-            loadHomeData()
-        }
+        // Repository is now cleanly instantiated internally via AndroidViewModel
     }
 
     init {
@@ -89,96 +105,112 @@ class HomeViewModel : ViewModel() {
 
         viewModelScope.launch {
             _isLoading.value = true
+            _uiState.value = _uiState.value.copy(isLoading = true, isRefreshing = force, error = null)
             lastRefreshTime = currentTime
-            
+
             try {
-                // Analysis of user habits
-                val liked = repository?.likedTracks?.first()?.take(5) ?: emptyList()
+                // Determine user habit recommendations based on local liked history
+                val liked = repository.likedTracks.firstOrNull()?.take(5) ?: emptyList()
                 val topArtist = liked.map { it.artist }.groupBy { it }.maxByOrNull { it.value.size }?.key ?: "Arijit Singh"
-                
                 val forYouQuery = if (liked.isNotEmpty()) "$topArtist Radio Mix" else "Popular Hindi Hits 2024"
 
-                // 1. FAST LOAD: Initial important sections
+                // 1. FAST LOAD: Primary home sections
                 val trendingJob = async { YouTubeExtractor.search("Trending Hindi Songs India Top Hits") }
                 val forYouJob = async { YouTubeExtractor.search(forYouQuery) }
-                
+
                 val fastResults = awaitAll(trendingJob, forYouJob)
-                val enrichedTrending = repository?.enrichTracks(fastResults[0].shuffled().take(10).ifEmpty { getDummyTracks("Trending") }) ?: emptyList()
-                val enrichedForYou = repository?.enrichTracks(fastResults[1].shuffled().take(10).ifEmpty { getDummyTracks("For You") }) ?: emptyList()
-                
+                val enrichedTrending = repository.enrichTracks(fastResults[0].shuffled().take(10).ifEmpty { getFallbackTracks("Trending") })
+                val enrichedForYou = repository.enrichTracks(fastResults[1].shuffled().take(10).ifEmpty { getFallbackTracks("For You") })
+
                 _trendingSongs.value = enrichedTrending
                 _forYouSongs.value = enrichedForYou
-                
-                _isLoading.value = false // Hide loader early
+                _isLoading.value = false
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isRefreshing = false,
+                    trending = enrichedTrending,
+                    forYou = enrichedForYou
+                )
 
-                // 2. BACKGROUND LOAD: The rest of the sections (Throttled)
+                // 2. BACKGROUND LOAD: Additional Curated Mixes (Chunked for performance)
                 launch {
-                    val moodQueries = listOf(
-                        "lofi music relaxation",
-                        "Gym Motivation Workout Music",
-                        "Deep Focus ambient"
-                    )
-                    val smartQueries = listOf(
-                        "New Music Release India",
-                        "Evergreen Classic Hits"
-                    )
-                    val culturalQueries = listOf(
-                        "Bhakti Sagar Shiv Bhajan Aarti",
-                        "Desi Shaadi Sangeet Vibe"
-                    )
-                    
-                    // Load in smaller chunks
-                    val moodResults = moodQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
-                    _moodMixes.value = listOf(
-                        "Chill / Relaxation Zone" to (repository?.enrichTracks(moodResults[0]) ?: moodResults[0]),
-                        "Workout / Energy Booster" to (repository?.enrichTracks(moodResults[1]) ?: moodResults[1]),
-                        "Focus / Study Mode" to (repository?.enrichTracks(moodResults[2]) ?: moodResults[2])
-                    )
-                    
-                    val smartResults = smartQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
-                    _smartMixes.value = listOf(
-                        "Radar / New Release" to (repository?.enrichTracks(smartResults[0]) ?: smartResults[0]),
-                        "Time Capsule" to (repository?.enrichTracks(smartResults[1]) ?: smartResults[1])
-                    )
-                    
-                    // Delay slightly between chunks to reduce CPU/Network spike
-                    delay(500)
-                    
-                    val culturalResults = culturalQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
-                    _culturalFestiveMixes.value = listOf(
-                        "Bhakti Ras (भक्ति सागर)" to (repository?.enrichTracks(culturalResults[0]) ?: culturalResults[0]),
-                        "Desi Shaadi / Sangeet" to (repository?.enrichTracks(culturalResults[1]) ?: culturalResults[1])
-                    )
-                    
-                    // Load remaining sections...
-                    val topIndia = YouTubeExtractor.search("Top 50 Songs India")
-                    _globalHits.value = listOf("Top India" to (repository?.enrichTracks(topIndia) ?: topIndia))
+                    try {
+                        val moodQueries = listOf(
+                            "lofi music relaxation",
+                            "Gym Motivation Workout Music",
+                            "Deep Focus ambient"
+                        )
+                        val moodResults = moodQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
+                        val moodList = listOf(
+                            "Chill / Relaxation Zone" to repository.enrichTracks(moodResults[0]),
+                            "Workout / Energy Booster" to repository.enrichTracks(moodResults[1]),
+                            "Focus / Study Mode" to repository.enrichTracks(moodResults[2])
+                        )
+                        _moodMixes.value = moodList
+                        _uiState.value = _uiState.value.copy(moodMixes = moodList)
 
-                    // Curated Sections for Flagship Polish
-                    val curatedQueries = listOf(
-                        "Coke Studio Bharat Hits",
-                        "Indie Hindi Gems 2024",
-                        "Bollywood Lo-fi Mashup 1 hour"
-                    )
-                    val curatedResults = curatedQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
-                    _curatedSections.value = listOf(
-                        "Melodify Picks" to (repository?.enrichTracks(curatedResults[0]) ?: curatedResults[0]),
-                        "Hidden Gems" to (repository?.enrichTracks(curatedResults[1]) ?: curatedResults[1]),
-                        "Editor's Choice" to (repository?.enrichTracks(curatedResults[2]) ?: curatedResults[2])
-                    )
+                        delay(400) // Brief pacing to keep Compose rendering smooth
+
+                        val smartQueries = listOf(
+                            "New Music Release India",
+                            "Evergreen Classic Hits"
+                        )
+                        val smartResults = smartQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
+                        _smartMixes.value = listOf(
+                            "Radar / New Release" to repository.enrichTracks(smartResults[0]),
+                            "Time Capsule" to repository.enrichTracks(smartResults[1])
+                        )
+
+                        val culturalQueries = listOf(
+                            "Bhakti Sagar Shiv Bhajan Aarti",
+                            "Desi Shaadi Sangeet Vibe"
+                        )
+                        val culturalResults = culturalQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
+                        _culturalFestiveMixes.value = listOf(
+                            "Bhakti Ras (भक्ति सागर)" to repository.enrichTracks(culturalResults[0]),
+                            "Desi Shaadi / Sangeet" to repository.enrichTracks(culturalResults[1])
+                        )
+
+                        val topIndia = YouTubeExtractor.search("Top 50 Songs India")
+                        _globalHits.value = listOf("Top India" to repository.enrichTracks(topIndia))
+
+                        val curatedQueries = listOf(
+                            "Coke Studio Bharat Hits",
+                            "Indie Hindi Gems 2024",
+                            "Bollywood Lo-fi Mashup 1 hour"
+                        )
+                        val curatedResults = curatedQueries.map { q -> async { YouTubeExtractor.search(q) } }.awaitAll()
+                        val curatedList = listOf(
+                            "Melodify Picks" to repository.enrichTracks(curatedResults[0]),
+                            "Hidden Gems" to repository.enrichTracks(curatedResults[1]),
+                            "Editor's Choice" to repository.enrichTracks(curatedResults[2])
+                        )
+                        _curatedSections.value = curatedList
+                        _uiState.value = _uiState.value.copy(curatedSections = curatedList)
+                    } catch (e: Exception) {
+                        android.util.Log.e("HomeViewModel", "Error loading background home mixes", e)
+                    }
                 }
 
             } catch (e: Exception) {
                 android.util.Log.e("HomeViewModel", "Error loading home data", e)
                 _isLoading.value = false
+                _uiState.value = _uiState.value.copy(isLoading = false, isRefreshing = false, error = e.localizedMessage)
+                if (_trendingSongs.value.isEmpty()) {
+                    _trendingSongs.value = getFallbackTracks("Trending")
+                }
             }
         }
     }
 
-    private fun getDummyTracks(category: String): List<TrackEntity> {
+    private suspend fun getFallbackTracks(category: String): List<TrackEntity> {
+        val cachedTracks = repository.allTracks.firstOrNull()?.take(10) ?: emptyList()
+        if (cachedTracks.isNotEmpty()) {
+            return cachedTracks
+        }
         return listOf(
-            TrackEntity("dQw4w9WgXcQ", "$category Special 1", "Artist Collection", "https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg"),
-            TrackEntity("3JZ_D3ELwOQ", "$category Mix 2", "Artist Collection", "https://img.youtube.com/vi/3JZ_D3ELwOQ/0.jpg")
+            TrackEntity("dQw4w9WgXcQ", "$category Special", "Melodify Artist", "https://img.youtube.com/vi/dQw4w9WgXcQ/0.jpg"),
+            TrackEntity("3JZ_D3ELwOQ", "$category Hits", "Melodify Artist", "https://img.youtube.com/vi/3JZ_D3ELwOQ/0.jpg")
         )
     }
 }

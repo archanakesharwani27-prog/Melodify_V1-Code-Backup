@@ -38,6 +38,9 @@ interface TrackDao {
     @Query("SELECT * FROM tracks WHERE id = :id LIMIT 1")
     suspend fun getTrackById(id: String): TrackEntity?
 
+    @Query("SELECT * FROM tracks WHERE title LIKE '%' || :query || '%' OR artist LIKE '%' || :query || '%' LIMIT 25")
+    fun searchLocalTracks(query: String): Flow<List<TrackEntity>>
+
     // Playlist Operations
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlaylist(playlist: PlaylistEntity): Long
@@ -54,6 +57,9 @@ interface TrackDao {
     @Transaction
     @Query("SELECT * FROM tracks INNER JOIN playlist_track_cross_ref ON tracks.id = playlist_track_cross_ref.trackId WHERE playlistId = :playlistId ORDER BY position ASC")
     fun getTracksForPlaylist(playlistId: Long): Flow<List<TrackEntity>>
+
+    @Query("SELECT COUNT(*) FROM playlist_track_cross_ref WHERE playlistId = :playlistId")
+    suspend fun getPlaylistTrackCount(playlistId: Long): Int
 
     @Transaction
     @Query("SELECT * FROM playlists WHERE id = :playlistId")

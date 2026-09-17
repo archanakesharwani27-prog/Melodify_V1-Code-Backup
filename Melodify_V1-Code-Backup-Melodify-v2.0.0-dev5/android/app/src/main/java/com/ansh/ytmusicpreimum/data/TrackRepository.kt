@@ -14,6 +14,10 @@ class TrackRepository(private val trackDao: TrackDao) {
     val history: Flow<List<HistoryEntity>> = trackDao.getHistory()
     val recentSearches: Flow<List<String>> = trackDao.getRecentSearches()
 
+    fun searchLocalTracks(query: String): Flow<List<TrackEntity>> = trackDao.searchLocalTracks(query)
+
+    suspend fun getPlaylistTrackCount(playlistId: Long): Int = trackDao.getPlaylistTrackCount(playlistId)
+
     suspend fun insert(track: TrackEntity) {
         trackDao.insertTrack(track)
         syncTrackToCloud(track)

@@ -127,13 +127,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun addTrackToPlaylist(playlistId: Long, track: TrackEntity) {
         viewModelScope.launch {
             trackDao.insertTrack(track)
-            // Get current tracks to determine position
-            val currentTracks = withContext(Dispatchers.IO) {
-                // We need a way to get the count or the next position
-                // For now, just add at the end
-                0 // placeholder, should ideally be currentTracks.size
+            val currentCount = withContext(Dispatchers.IO) {
+                repository.getPlaylistTrackCount(playlistId)
             }
-            trackDao.insertTrackToPlaylist(PlaylistTrackCrossRef(playlistId, track.id, position = 0)) // simplistic
+            trackDao.insertTrackToPlaylist(PlaylistTrackCrossRef(playlistId, track.id, position = currentCount))
             repository.syncTrackToPlaylistInCloud(playlistId, track.id)
         }
     }

@@ -46,12 +46,6 @@ fun HomeScreen(
     homeViewModel: HomeViewModel = viewModel(),
     musicViewModel: MusicViewModel = viewModel()
 ) {
-    val libraryViewModel: LibraryViewModel = viewModel()
-    
-    LaunchedEffect(Unit) {
-        homeViewModel.setRepository(libraryViewModel.repository)
-    }
-
     val trending by homeViewModel.trendingSongs.collectAsState()
     val forYou by homeViewModel.forYouSongs.collectAsState()
     val moodMixes by homeViewModel.moodMixes.collectAsState()
