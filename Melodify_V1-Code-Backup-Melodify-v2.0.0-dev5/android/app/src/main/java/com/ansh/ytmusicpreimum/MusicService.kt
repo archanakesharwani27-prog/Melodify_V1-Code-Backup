@@ -107,6 +107,37 @@ class MusicService : MediaSessionService() {
                 }
                 audioVisualizer?.enabled = isPlaying
             }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                android.util.Log.e("MusicService", "Playback error encountered: ${error.errorCodeName} (${error.errorCode})", error)
+                val currentItem = exoPlayer.currentMediaItem ?: return
+                val videoId = currentItem.mediaId
+
+                // If error is network or stale/expired stream URL, attempt silent recovery
+                if (!videoId.startsWith("content://") && !videoId.startsWith("file://") && videoId.isNotEmpty()) {
+                    android.util.Log.i("MusicService", "Attempting silent stream renewal for videoId: $videoId")
+                    serviceScope.launch(Dispatchers.IO) {
+                        try {
+                            YouTubeExtractor.invalidateCache(videoId)
+                            val quality = currentItem.mediaMetadata.extras?.getString("quality") ?: "Medium"
+                            val freshUrl = YouTubeExtractor.getAudioUrl(videoId, quality)
+
+                            if (freshUrl != null && isActive) {
+                                withContext(Dispatchers.Main) {
+                                    val currentPos = exoPlayer.currentPosition
+                                    val renewedItem = currentItem.buildUpon().setUri(freshUrl).build()
+                                    exoPlayer.setMediaItem(renewedItem, currentPos)
+                                    exoPlayer.prepare()
+                                    exoPlayer.play()
+                                    android.util.Log.i("MusicService", "Silent stream renewal succeeded for $videoId")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("MusicService", "Failed stream renewal for $videoId", e)
+                        }
+                    }
+                }
+            }
         })
 
         exoPlayer.addAnalyticsListener(object : AnalyticsListener {
@@ -364,7 +395,11 @@ class MusicService : MediaSessionService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaSession?.player
-        player?.pause()
-        stopSelf()
+        // If not playing or idle, terminate service cleanly.
+        // If actively playing in foreground, retain playback.
+        if (player == null || !player.playWhenReady || player.playbackState == Player.STATE_ENDED || player.playbackState == Player.STATE_IDLE) {
+            player?.pause()
+            stopSelf()
+        }
     }
 }

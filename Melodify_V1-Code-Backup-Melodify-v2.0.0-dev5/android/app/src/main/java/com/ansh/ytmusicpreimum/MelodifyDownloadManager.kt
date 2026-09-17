@@ -20,6 +20,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 enum class DownloadStatus {
     DOWNLOADING, PAUSED, COMPLETED, FAILED
@@ -33,7 +34,11 @@ data class DownloadState(
 )
 
 class MelodifyDownloadManager(private val context: Context) {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val database = AppDatabase.getDatabase(context)
     private val trackDao = database.trackDao()
@@ -46,9 +51,14 @@ class MelodifyDownloadManager(private val context: Context) {
 
     private val activeJobs = ConcurrentHashMap<String, Job>()
     private val downloadQueue = java.util.Collections.synchronizedList(mutableListOf<DownloadRequest>())
-    
-    data class DownloadRequest(val track: TrackEntity, val url: String, val quality: String)
-    
+
+    data class DownloadRequest(
+        val track: TrackEntity,
+        val url: String,
+        val quality: String,
+        val retryCount: Int = 0
+    )
+
     private var maxConcurrentDownloads = 1
     private var currentNetworkPreference: Int = 0
 
@@ -58,7 +68,7 @@ class MelodifyDownloadManager(private val context: Context) {
 
     fun downloadSong(track: TrackEntity, audioUrl: String, quality: String, userTier: Int = 0, networkType: Int = 0) {
         if (activeJobs.containsKey(track.id) || downloadQueue.any { it.track.id == track.id }) return
-        
+
         currentNetworkPreference = networkType
 
         if (!isNetworkAllowed(networkType)) {
@@ -67,18 +77,30 @@ class MelodifyDownloadManager(private val context: Context) {
         }
 
         maxConcurrentDownloads = if (userTier >= 2) 5 else 2
-        
+
         _queuedTracks.value += track
-        downloadQueue.add(DownloadRequest(track, audioUrl, quality))
-        
+        downloadQueue.add(DownloadRequest(track, audioUrl, quality, retryCount = 0))
+
         processQueue(userTier)
+    }
+
+    fun retryDownload(track: TrackEntity, quality: String, userTier: Int = 0, networkType: Int = 0) {
+        _downloadStates.update { it - track.id }
+        scope.launch {
+            val freshUrl = YouTubeExtractor.getAudioUrl(track.id, quality)
+            if (freshUrl != null) {
+                downloadSong(track, freshUrl, quality, userTier, networkType)
+            } else {
+                _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.FAILED, quality = quality)) }
+            }
+        }
     }
 
     private fun isNetworkAllowed(preferredType: Int): Boolean {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork ?: return false
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-        
+
         return when (preferredType) {
             0 -> capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) // Wifi only
             1 -> true // All Networks
@@ -96,61 +118,66 @@ class MelodifyDownloadManager(private val context: Context) {
         val track = request.track
         val url = request.url
         val quality = request.quality
-        
+        val retryCount = request.retryCount
+
         _queuedTracks.value = _queuedTracks.value.filter { it.id != track.id }
-        
+
         val job = scope.launch {
+            var file: File? = null
             try {
                 val folder = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
                 if (folder?.exists() == false) folder.mkdirs()
-                
-                val file = File(folder, "${track.id}.mp3")
+
+                file = File(folder, "${track.id}.mp3")
                 val okHttpRequest = Request.Builder().url(url).build()
 
                 client.newCall(okHttpRequest).execute().use { response ->
-                    if (!response.isSuccessful) throw Exception("Failed to download: $response")
+                    if (!response.isSuccessful) throw Exception("Failed to download HTTP ${response.code}: $response")
 
                     val body = response.body ?: throw Exception("Body null")
                     val totalBytes = body.contentLength()
-                    
+
                     val totalMb = if (totalBytes > 0) {
                         String.format("%.1f MB", totalBytes.toFloat() / (1024 * 1024))
                     } else {
                         "Unknown Size"
                     }
-                    
+
                     _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.DOWNLOADING, 0f, totalMb, quality)) }
 
-                    val inputStream = body.byteStream()
+                    val inputStream: InputStream = body.byteStream()
                     val outputStream = FileOutputStream(file)
-                    
-                    val bufferSize = if (userTier >= 2) 65536 else 8192 
+
+                    val bufferSize = if (userTier >= 2) 65536 else 8192
                     val buffer = ByteArray(bufferSize)
-                    
+
                     var bytesRead: Int
                     var currentBytes = 0L
-
                     var lastProgressUpdate = 0L
-                    while (isActive) {
-                        bytesRead = inputStream.read(buffer)
-                        if (bytesRead == -1) break
-                        
-                        outputStream.write(buffer, 0, bytesRead)
-                        currentBytes += bytesRead
 
-                        if (totalBytes > 0) {
-                            val now = System.currentTimeMillis()
-                            if (now - lastProgressUpdate > 500) { // Update every 500ms
-                                val progress = currentBytes.toFloat() / totalBytes.toFloat()
-                            _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.DOWNLOADING, progress, totalMb, quality)) }
-                                updateOngoingNotification(track, (progress * 100).toInt())
-                                lastProgressUpdate = now
+                    try {
+                        while (isActive) {
+                            bytesRead = inputStream.read(buffer)
+                            if (bytesRead == -1) break
+
+                            outputStream.write(buffer, 0, bytesRead)
+                            currentBytes += bytesRead
+
+                            if (totalBytes > 0) {
+                                val now = System.currentTimeMillis()
+                                if (now - lastProgressUpdate > 500) { // Update every 500ms
+                                    val progress = currentBytes.toFloat() / totalBytes.toFloat()
+                                    _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.DOWNLOADING, progress, totalMb, quality)) }
+                                    updateOngoingNotification(track, (progress * 100).toInt())
+                                    lastProgressUpdate = now
+                                }
                             }
                         }
+                        outputStream.flush()
+                    } finally {
+                        outputStream.close()
+                        inputStream.close()
                     }
-
-                    outputStream.close()
-                    inputStream.close()
 
                     if (isActive) {
                         val updatedTrack = track.copy(isDownloaded = true, localFilePath = file.absolutePath)
@@ -164,7 +191,24 @@ class MelodifyDownloadManager(private val context: Context) {
                     }
                 }
             } catch (e: Exception) {
-                android.util.Log.e("MelodifyDownload", "Error downloading ${track.title}", e)
+                android.util.Log.e("MelodifyDownload", "Error downloading ${track.title} (attempt $retryCount)", e)
+                file?.let { if (it.exists()) it.delete() } // Clean up partial download
+
+                // Auto-retry with fresh resolved URL if expired/stale URL caused failure
+                if (retryCount < 2 && isActive) {
+                    android.util.Log.i("MelodifyDownload", "Retrying download with renewed URL for ${track.title}")
+                    try {
+                        YouTubeExtractor.invalidateCache(track.id)
+                        val freshUrl = YouTubeExtractor.getAudioUrl(track.id, quality)
+                        if (freshUrl != null) {
+                            downloadQueue.add(0, DownloadRequest(track, freshUrl, quality, retryCount + 1))
+                            return@launch
+                        }
+                    } catch (retryEx: Exception) {
+                        android.util.Log.e("MelodifyDownload", "Failed to resolve fresh URL for retry", retryEx)
+                    }
+                }
+
                 _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.FAILED, quality = quality)) }
                 cancelOngoingNotification(track.id)
             } finally {
@@ -186,6 +230,11 @@ class MelodifyDownloadManager(private val context: Context) {
         activeJobs.remove(songId)
         _downloadStates.update { it - songId }
         cancelOngoingNotification(songId)
+
+        // Clean up partial file
+        val folder = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+        val file = File(folder, "$songId.mp3")
+        if (file.exists()) file.delete()
     }
 
     private fun updateOngoingNotification(track: TrackEntity, progress: Int) {
@@ -219,17 +268,16 @@ class MelodifyDownloadManager(private val context: Context) {
         notificationManager.cancel(trackId.hashCode())
     }
 
-    private fun showDownloadNotification(title: String) {
-        // Legacy, using showDownloadCompleteNotification instead
-    }
-
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel("download_channel", "Downloads", NotificationManager.IMPORTANCE_DEFAULT)
+            val channel = NotificationChannel("download_channel", "Downloads", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Music download progress and notifications"
+                setShowBadge(false)
+            }
             context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
-    
+
     companion object {
         @Volatile private var INSTANCE: MelodifyDownloadManager? = null
         fun getInstance(context: Context): MelodifyDownloadManager = INSTANCE ?: synchronized(this) {

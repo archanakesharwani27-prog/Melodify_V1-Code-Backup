@@ -23,6 +23,15 @@ object YouTubeExtractor {
         this.trackDao = dao
     }
 
+    suspend fun invalidateCache(videoId: String) {
+        urlCache.remove(videoId)
+        try {
+            trackDao?.deleteStreamCache(videoId)
+        } catch (e: Exception) {
+            android.util.Log.e("YouTubeExtractor", "Failed to clear stream cache for $videoId", e)
+        }
+    }
+
     private data class CachedUrl(val url: String, val timestamp: Long)
 
     private suspend fun getCachedUrl(videoId: String, quality: String): String? {

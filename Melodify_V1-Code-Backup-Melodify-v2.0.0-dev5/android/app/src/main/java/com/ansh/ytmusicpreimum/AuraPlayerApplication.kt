@@ -17,16 +17,18 @@ class MelodifyApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        
+        // Initialize NewPipe downloader immediately to prevent race conditions on startup
+        try {
+            NewPipe.init(NewPipeDownloader.getInstance())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         // Background initialization for non-critical components to improve startup time
         appScope.launch {
-            // Initialize Database and provide to Extractor
             val database = AppDatabase.getDatabase(this@MelodifyApplication)
             YouTubeExtractor.init(database.trackDao())
             LyricsManager.init(database.trackDao())
-
-            // Initialize NewPipe
-            NewPipe.init(NewPipeDownloader.getInstance())
             DynamicCipherManager.init()
         }
 

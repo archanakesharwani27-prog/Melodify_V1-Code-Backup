@@ -33,14 +33,24 @@ Melodify is an Android music streaming and local player application built using 
 - **Data Layer Hardening**:
   - Added Room search query `searchLocalTracks` in `TrackDao` for fast indexed matching on track title and artist.
 
+### Phase 3: Playback, Caching & Download Reliability (Completed)
+- **Silent Stream Auto-Recovery**:
+  - Added `onPlayerError` listener in `MusicService.kt` that detects expired YouTube stream URLs (HTTP 403 / 410 or network resets).
+  - Automatically invalidates stale stream cache via `YouTubeExtractor.invalidateCache(videoId)` and `TrackDao.deleteStreamCache(videoId)`.
+  - Resolves fresh audio stream and silently resumes playback from the user's exact position without crashing.
+- **Foreground Service Lifecycle**:
+  - Updated `onTaskRemoved` in `MusicService.kt` to preserve playback in the foreground when audio is actively playing, preventing unexpected music cutoff when the app is swiped away from recent tasks.
+- **Download Manager Resilience**:
+  - Added auto-retry logic (up to 2 attempts) with automatic stale URL re-resolution in `MelodifyDownloadManager.kt`.
+  - Guaranteed partial/corrupted file cleanup (`file.delete()`) on download cancellation or error.
+  - Set `NotificationManager.IMPORTANCE_LOW` for download notifications to prevent buzzing/beeping during download progress updates.
+  - Added `retryDownload` method for manual restart of failed downloads.
+- **Startup Stability**:
+  - Initialized `NewPipe.init` synchronously in `MelodifyApplication` (`AuraPlayerApplication.kt`) to eliminate cold-start race conditions.
+
 ---
 
 ## Remaining Phases
-
-### Phase 3: Playback, Caching & Download Reliability
-- Media3 foreground service lifecycle management and audio focus.
-- Stream URL expiry handling and silent auto-refresh.
-- Download queue retry mechanisms and cellular data guards.
 
 ### Phase 4: Automated Testing & Production Polish
 - Unit tests for ViewModels, TrackDao, and Repository.

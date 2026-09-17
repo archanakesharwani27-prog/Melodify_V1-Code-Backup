@@ -123,6 +123,9 @@ interface TrackDao {
     @Query("DELETE FROM stream_cache WHERE expiryTime < :currentTime")
     suspend fun clearExpiredCache(currentTime: Long)
 
+    @Query("DELETE FROM stream_cache WHERE videoId = :videoId")
+    suspend fun deleteStreamCache(videoId: String)
+
     // Lyrics Cache Operations
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLyrics(lyrics: LyricsEntity)

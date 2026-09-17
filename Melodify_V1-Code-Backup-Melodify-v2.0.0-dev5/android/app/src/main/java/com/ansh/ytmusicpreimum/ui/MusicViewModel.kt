@@ -313,10 +313,18 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             }
                         }
                         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                            _playbackError.value = "Playback Error: ${error.errorCodeName}"
-                            _isBuffering.value = false
-                            _isPlaying.value = false
                             android.util.Log.e("MusicViewModel", "Player error: ${error.message}", error)
+                            val isNetworkOrStale = error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ||
+                                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+
+                            if (isNetworkOrStale) {
+                                _playbackError.value = "Reconnecting audio stream..."
+                            } else {
+                                _playbackError.value = "Playback Error: ${error.errorCodeName}"
+                                _isBuffering.value = false
+                                _isPlaying.value = false
+                            }
                         }
                         override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
                             _shuffleModeEnabled.value = shuffleModeEnabled
