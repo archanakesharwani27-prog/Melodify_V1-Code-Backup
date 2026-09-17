@@ -5,7 +5,7 @@ Melodify is an Android music streaming and local player application built using 
 
 ---
 
-## Architecture Evolution
+## Architecture Evolution & Milestones
 
 ### Phase 1: Monolithic UI Decomposition (Completed)
 - **Problem**: Monolithic `MainActivity.kt` containing 4,063 lines of code hosting all screens, dialogs, canvas animations, and players.
@@ -48,11 +48,14 @@ Melodify is an Android music streaming and local player application built using 
 - **Startup Stability**:
   - Initialized `NewPipe.init` synchronously in `MelodifyApplication` (`AuraPlayerApplication.kt`) to eliminate cold-start race conditions.
 
----
-
-## Remaining Phases
-
-### Phase 4: Automated Testing & Production Polish
-- Unit tests for ViewModels, TrackDao, and Repository.
-- UI state instrumentation tests.
-- ProGuard rules and release build verification.
+### Phase 4: Automated Testing & Production Hardening (Completed)
+- **Automated Unit Tests Added**:
+  - `TrackEntityTest.kt`: Unit test coverage for data model defaults, copy semantics, and download flags.
+  - `HomeUiStateTest.kt`: Unit tests for Home state transitions, immutability, and data binding.
+  - `SearchUiStateTest.kt`: Unit tests covering `SearchUiState` sealed classes (`Idle`, `Loading`, `Success`, `Empty`, `Error`).
+  - `FormatTimeUnitTest.kt`: Unit tests for playback duration and progress formatting.
+- **Production ProGuard / R8 Rules**:
+  - Added explicit keep rules for Room Database and Daos.
+  - Preserved Firebase Firestore serialization classes and property annotations.
+  - Preserved NewPipe Extractor and AndroidX Media3 / ExoPlayer interfaces from obfuscation damage.
+  - Preserved debug line numbers for crash analysis.
