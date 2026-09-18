@@ -187,18 +187,26 @@ class TrackRepository(private val trackDao: TrackDao) {
 
     suspend fun syncPlaylistToCloud(playlist: PlaylistEntity) {
         val userId = getActiveUserId() ?: return
-        firestore.collection("users").document(userId)
-            .collection("playlists").document(playlist.id.toString())
-            .set(playlist).await()
+        try {
+            firestore.collection("users").document(userId)
+                .collection("playlists").document(playlist.id.toString())
+                .set(playlist).await()
+        } catch (e: Exception) {
+            android.util.Log.e("TrackRepository", "Error syncing playlist to cloud", e)
+        }
     }
 
     suspend fun syncTrackToPlaylistInCloud(playlistId: Long, trackId: String) {
         val userId = getActiveUserId() ?: return
-        val ref = PlaylistTrackCrossRef(playlistId, trackId)
-        firestore.collection("users").document(userId)
-            .collection("playlists").document(playlistId.toString())
-            .collection("tracks").document(trackId.replace("/", "_"))
-            .set(ref).await()
+        try {
+            val ref = PlaylistTrackCrossRef(playlistId, trackId)
+            firestore.collection("users").document(userId)
+                .collection("playlists").document(playlistId.toString())
+                .collection("tracks").document(trackId.replace("/", "_"))
+                .set(ref).await()
+        } catch (e: Exception) {
+            android.util.Log.e("TrackRepository", "Error syncing playlist track to cloud", e)
+        }
     }
 
     suspend fun clearLocalData() {

@@ -37,7 +37,14 @@ import com.google.android.gms.common.api.ApiException
 @Composable
 fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (String?, String?, String?) -> Unit) {
     val context = LocalContext.current
-    val activity = context as Activity
+    val activity = remember(context) {
+        var c = context
+        while (c is android.content.ContextWrapper) {
+            if (c is Activity) return@remember c
+            c = c.baseContext
+        }
+        null
+    }
     val webClientId = "854004439119-vtfd5l5rfet0rviabr9uqe3d4rbgucj1.apps.googleusercontent.com"
     
     var showEmailDialog by remember { mutableStateOf(false) }
@@ -235,9 +242,13 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
         PhoneLoginDialog(
             onDismiss = { showPhoneDialog = false },
             onSendOtp = { phone -> 
-                loginViewModel.sendOtp(phone, activity) {
-                    showPhoneDialog = false
-                    showOtpDialog = true
+                if (activity != null) {
+                    loginViewModel.sendOtp(phone, activity) {
+                        showPhoneDialog = false
+                        showOtpDialog = true
+                    }
+                } else {
+                    Toast.makeText(context, "Activity context unavailable", Toast.LENGTH_SHORT).show()
                 }
             }
         )

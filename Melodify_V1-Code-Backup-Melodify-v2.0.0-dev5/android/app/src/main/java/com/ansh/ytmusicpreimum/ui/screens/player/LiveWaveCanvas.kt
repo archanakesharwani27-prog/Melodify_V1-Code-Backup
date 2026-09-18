@@ -1,5 +1,6 @@
 package com.ansh.ytmusicpreimum.ui.screens.player
 
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -11,39 +12,39 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ansh.ytmusicpreimum.VisualizerData
-import kotlinx.coroutines.isActive
 
 @Composable
 fun LiveWaveCanvas(isPlaying: Boolean, modifier: Modifier = Modifier) {
     val fftData by VisualizerData.fftData.collectAsState()
-    val barCount = 44
-    
-    var frameTick by remember { mutableLongStateOf(0L) }
-    
-    LaunchedEffect(isPlaying) {
-        if (isPlaying) {
-            while (isActive) {
-                withFrameNanos { time ->
-                    frameTick = time
-                }
-            }
-        }
-    }
+    val barCount = 42
 
-    val barHeights = remember { FloatArray(barCount) { 0.1f } }
+    val infiniteTransition = rememberInfiniteTransition(label = "waveLoop")
+    val animPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2.0 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "animPhase"
+    )
+
+    val barHeights = remember { FloatArray(barCount) { 0.12f } }
     val gradientBrush = remember {
         Brush.verticalGradient(
             colors = listOf(
-                Color(0xFF00E5FF), 
-                Color(0xFFE91E63), 
-                Color(0xFF9C27B0)
+                Color(0xFF00E5FF), // Cyan neon top
+                Color(0xFFE91E63), // Pink/Magenta mid
+                Color(0xFF9C27B0)  // Deep Purple base
             )
         )
     }
@@ -52,8 +53,7 @@ fun LiveWaveCanvas(isPlaying: Boolean, modifier: Modifier = Modifier) {
         fftData.isNotEmpty() && fftData.any { it != 0.toByte() }
     }
 
-    val timeSec = (frameTick / 1_000_000_000.0).toFloat()
-
+    // Update bar heights smoothly
     if (isPlaying) {
         if (hasHardwareFft) {
             for (i in 0 until barCount) {
@@ -63,35 +63,34 @@ fun LiveWaveCanvas(isPlaying: Boolean, modifier: Modifier = Modifier) {
                     val imag = fftData[fftIndex + 1].toInt()
                     val magnitude = kotlin.math.hypot(real.toDouble(), imag.toDouble()).toFloat()
                     val normalized = (magnitude / 128f).coerceIn(0.08f, 1f)
-                    val sensitivity = if (i < barCount / 4) 1.8f else 1.2f 
+                    val sensitivity = if (i < barCount / 4) 1.8f else 1.2f
                     val targetHeight = (normalized * sensitivity).coerceIn(0.08f, 1f)
                     barHeights[i] = barHeights[i] * 0.35f + targetHeight * 0.65f
                 }
             }
         } else {
-            // Algorithmic energetic beat visualizer when hardware FFT is dormant
-            val beatPhase = (timeSec * 4.4f) % (2f * Math.PI.toFloat())
-            val kick = kotlin.math.max(0f, kotlin.math.sin(beatPhase)).let { it * it * it }
-            
+            // Algorithmic energetic beat rhythm based on animPhase
+            val kick = kotlin.math.max(0f, kotlin.math.sin(animPhase * 2.2f)).let { it * it * it }
+
             for (i in 0 until barCount) {
                 val freqOffset = i.toFloat() / barCount.toFloat()
-                val wave1 = kotlin.math.sin(timeSec * 5.2f + freqOffset * 8.5f) * 0.28f
-                val wave2 = kotlin.math.cos(timeSec * 9.1f - freqOffset * 11.5f) * 0.22f
-                val bassPunch = if (i < barCount / 3) kick * (1f - (i.toFloat() / (barCount / 3f))) * 0.65f else 0f
-                val targetHeight = (0.16f + wave1 + wave2 + bassPunch).coerceIn(0.08f, 0.95f)
-                barHeights[i] = barHeights[i] * 0.5f + targetHeight * 0.5f
+                val wave1 = kotlin.math.sin(animPhase * 2.8f + freqOffset * 7.5f) * 0.26f
+                val wave2 = kotlin.math.cos(animPhase * 4.6f - freqOffset * 10.5f) * 0.20f
+                val bassPunch = if (i < barCount / 3) kick * (1f - (i.toFloat() / (barCount / 3f))) * 0.60f else 0f
+                val targetHeight = (0.18f + wave1 + wave2 + bassPunch).coerceIn(0.08f, 0.95f)
+                barHeights[i] = barHeights[i] * 0.45f + targetHeight * 0.55f
             }
         }
     } else {
         for (i in 0 until barCount) {
-            barHeights[i] = barHeights[i] * 0.82f
+            barHeights[i] = barHeights[i] * 0.85f
         }
     }
 
     Surface(
         modifier = modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(24.dp)), 
+            .clip(RoundedCornerShape(24.dp)),
         color = Color.Black.copy(alpha = 0.5f),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
     ) {
@@ -101,22 +100,30 @@ fun LiveWaveCanvas(isPlaying: Boolean, modifier: Modifier = Modifier) {
                     .fillMaxSize()
                     .padding(horizontal = 14.dp, vertical = 28.dp)
             ) {
+                if (size.width <= 0f || size.height <= 0f) return@Canvas
+
                 val width = size.width
                 val height = size.height
                 val spacing = 3.5.dp.toPx()
-                val barWidth = (width - (barCount * spacing)) / barCount
-                val midY = height / 2
+                val totalSpacing = (barCount - 1) * spacing
+                val barWidth = ((width - totalSpacing) / barCount).coerceAtLeast(1f)
+                if (barWidth <= 0f) return@Canvas
+
+                val midY = height / 2f
                 val baseAmplitude = height * 0.44f
+                val cornerRadiusPx = (barWidth / 2f).coerceAtLeast(0.5f)
 
                 for (i in 0 until barCount) {
-                    val animatedHeight = baseAmplitude * barHeights[i]
+                    val animatedHeight = (baseAmplitude * barHeights[i]).coerceIn(3f, height / 2f)
                     val x = i * (barWidth + spacing)
-                    
+                    val topY = (midY - animatedHeight).coerceAtLeast(0f)
+                    val totalBarHeight = (animatedHeight * 2f).coerceIn(6f, height)
+
                     drawRoundRect(
-                        brush = gradientBrush, 
-                        topLeft = Offset(x, midY - animatedHeight), 
-                        size = androidx.compose.ui.geometry.Size(barWidth, (animatedHeight * 2).coerceAtLeast(6f)), 
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2, barWidth / 2)
+                        brush = gradientBrush,
+                        topLeft = Offset(x, topY),
+                        size = Size(barWidth, totalBarHeight),
+                        cornerRadius = CornerRadius(cornerRadiusPx, cornerRadiusPx)
                     )
                 }
             }

@@ -1608,7 +1608,7 @@ fun AudioEffectsDialog(
                         ) {
                             RadioButton(
                                 selected = isSelected,
-                                onClick = { AudioEffectsManager.applyPreset(preset) },
+                                onClick = null,
                                 colors = RadioButtonDefaults.colors(
                                     selectedColor = MaterialTheme.colorScheme.primary
                                 )

@@ -157,13 +157,7 @@ class MelodifyDownloadManager(private val context: Context) {
             var file: File? = null
             try {
                 // App-private folder with .nomedia so files are hidden from phone gallery and removed on uninstall
-                val folder = File(context.getExternalFilesDir(null), "downloads").apply {
-                    if (!exists()) mkdirs()
-                    val noMedia = File(this, ".nomedia")
-                    if (!noMedia.exists()) {
-                        try { noMedia.createNewFile() } catch (e: Exception) {}
-                    }
-                }
+                val folder = getDownloadsDir()
 
                 val ext = if (isVideo) "mp4" else "mp3"
                 file = File(folder, "${track.id}.$ext")
@@ -270,9 +264,20 @@ class MelodifyDownloadManager(private val context: Context) {
         cancelOngoingNotification(songId)
 
         // Clean up partial files
-        val folder = File(context.getExternalFilesDir(null), "downloads")
+        val folder = getDownloadsDir()
         File(folder, "$songId.mp3").let { if (it.exists()) it.delete() }
         File(folder, "$songId.mp4").let { if (it.exists()) it.delete() }
+    }
+
+    private fun getDownloadsDir(): File {
+        val baseDir = context.getExternalFilesDir(null) ?: context.filesDir
+        return File(baseDir, "downloads").apply {
+            if (!exists()) mkdirs()
+            val noMedia = File(this, ".nomedia")
+            if (!noMedia.exists()) {
+                try { noMedia.createNewFile() } catch (e: Exception) {}
+            }
+        }
     }
 
     private fun updateOngoingNotification(track: TrackEntity, progress: Int, isVideo: Boolean = false) {

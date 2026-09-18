@@ -66,12 +66,16 @@ class MusicService : MediaSessionService() {
                     AudioEffectsManager.init(applicationContext, audioSessionId)
                     
                     // Notify system about our audio session
-                    val intent = Intent(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
-                        putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, audioSessionId)
-                        putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
-                        putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE, android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC)
+                    try {
+                        val intent = Intent(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                            putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, audioSessionId)
+                            putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+                            putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE, android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC)
+                        }
+                        sendBroadcast(intent)
+                    } catch (t: Throwable) {
+                        android.util.Log.w("MusicService", "Failed to broadcast audio effect session", t)
                     }
-                    sendBroadcast(intent)
                 } else {
                     android.util.Log.w("MusicDiagnostics", "onAudioSessionIdChanged: Invalid session ID $audioSessionId")
                 }
@@ -106,7 +110,11 @@ class MusicService : MediaSessionService() {
                 if (isPlaying) {
                     startBackgroundCheck()
                 }
-                audioVisualizer?.enabled = isPlaying
+                try {
+                    audioVisualizer?.enabled = isPlaying
+                } catch (t: Throwable) {
+                    android.util.Log.w("MusicService", "Failed to toggle visualizer state", t)
+                }
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -305,24 +313,46 @@ class MusicService : MediaSessionService() {
     }
 
     private fun initVisualizer(audioSessionId: Int) {
-        try {
-            audioVisualizer?.release()
-            audioVisualizer = Visualizer(audioSessionId).apply {
-                // Use a smaller capture size for performance
-                captureSize = 512
-                setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
-                    override fun onWaveFormDataCapture(visualizer: Visualizer?, waveform: ByteArray?, samplingRate: Int) {
-                        waveform?.let { VisualizerData.waveformData.value = it.copyOf() }
-                    }
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) 
+            != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            android.util.Log.d("MusicService", "RECORD_AUDIO permission not granted, hardware visualizer bypassed")
+            return
+        }
 
-                    override fun onFftDataCapture(visualizer: Visualizer?, fft: ByteArray?, samplingRate: Int) {
-                        fft?.let { VisualizerData.fftData.value = it.copyOf() }
-                    }
-                }, Visualizer.getMaxCaptureRate() / 4, true, true) // Reduced update frequency
-                enabled = exoPlayer.isPlaying
+        try {
+            audioVisualizer?.let { old ->
+                try { old.enabled = false } catch (t: Throwable) {}
+                try { old.release() } catch (t: Throwable) {}
             }
-        } catch (e: Exception) {
-            android.util.Log.e("MusicService", "Failed to init Visualizer", e)
+            audioVisualizer = null
+
+            val v = Visualizer(audioSessionId)
+            val range = Visualizer.getCaptureSizeRange()
+            if (range != null && range.size >= 2) {
+                val targetSize = 512.coerceIn(range[0], range[1])
+                v.captureSize = targetSize
+            }
+            val maxRate = Visualizer.getMaxCaptureRate()
+            val rate = if (maxRate > 0) maxRate / 4 else 10000
+
+            v.setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
+                override fun onWaveFormDataCapture(visualizer: Visualizer?, waveform: ByteArray?, samplingRate: Int) {
+                    waveform?.let { VisualizerData.waveformData.value = it.copyOf() }
+                }
+
+                override fun onFftDataCapture(visualizer: Visualizer?, fft: ByteArray?, samplingRate: Int) {
+                    fft?.let { VisualizerData.fftData.value = it.copyOf() }
+                }
+            }, rate, true, true)
+
+            try {
+                v.enabled = exoPlayer.isPlaying
+            } catch (t: Throwable) {}
+
+            audioVisualizer = v
+        } catch (t: Throwable) {
+            android.util.Log.e("MusicService", "Failed to init Visualizer safely", t)
+            audioVisualizer = null
         }
     }
 
@@ -420,16 +450,21 @@ class MusicService : MediaSessionService() {
         serviceScope.cancel()
         
         // Notify system session closing
-        val sessionId = exoPlayer.audioSessionId
-        if (sessionId != C.AUDIO_SESSION_ID_UNSET) {
-            val intent = Intent(android.media.audiofx.AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION).apply {
-                putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, sessionId)
-                putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+        try {
+            val sessionId = exoPlayer.audioSessionId
+            if (sessionId != C.AUDIO_SESSION_ID_UNSET) {
+                val intent = Intent(android.media.audiofx.AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                    putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, sessionId)
+                    putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+                }
+                sendBroadcast(intent)
             }
-            sendBroadcast(intent)
-        }
+        } catch (t: Throwable) {}
 
-        audioVisualizer?.release()
+        try {
+            audioVisualizer?.enabled = false
+            audioVisualizer?.release()
+        } catch (t: Throwable) {}
         audioVisualizer = null
         AudioEffectsManager.release()
         mediaSession?.run {
