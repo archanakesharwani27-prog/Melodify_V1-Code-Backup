@@ -15,17 +15,29 @@ abstract class AppDatabase : RoomDatabase() {
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "aura_player_database"
-                )
-                // Prevent wiping user playlists, downloads, and favorites on version upgrades.
-                // Destructive migration is only permitted on accidental database downgrades.
-                .fallbackToDestructiveMigrationOnDowngrade()
-                .build()
-                INSTANCE = instance
-                instance
+                val db = try {
+                    Room.databaseBuilder(
+                        context.applicationContext,
+                        AppDatabase::class.java,
+                        "aura_player_database"
+                    )
+                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigrationOnDowngrade()
+                    .build()
+                } catch (t: Throwable) {
+                    android.util.Log.e("AppDatabase", "Error initializing Room DB, clearing corrupt database file", t)
+                    try { context.applicationContext.deleteDatabase("aura_player_database") } catch (e: Throwable) {}
+                    Room.databaseBuilder(
+                        context.applicationContext,
+                        AppDatabase::class.java,
+                        "aura_player_database"
+                    )
+                    .fallbackToDestructiveMigration()
+                    .fallbackToDestructiveMigrationOnDowngrade()
+                    .build()
+                }
+                INSTANCE = db
+                db
             }
         }
     }

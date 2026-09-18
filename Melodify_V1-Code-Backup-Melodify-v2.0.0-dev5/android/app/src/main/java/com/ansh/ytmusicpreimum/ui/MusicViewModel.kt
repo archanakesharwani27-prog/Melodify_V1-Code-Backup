@@ -328,26 +328,34 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun saveQueueState() {
-        val statePrefs = getApplication<Application>().getSharedPreferences("playback_state", Context.MODE_PRIVATE)
-        statePrefs.edit().apply {
-            putString("queue_json", queueManager.serialize())
-            putInt("queue_index", queueManager.getCurrentIndex())
-            apply()
-        }
-        
-        // Save to Database for deep restoration
-        viewModelScope.launch(Dispatchers.IO) {
-            trackDao.clearQueue()
-            val queueEntities = queueManager.queue.value.mapIndexed { index, track ->
-                com.ansh.ytmusicpreimum.data.QueueEntity(
-                    trackId = track.id,
-                    title = track.title,
-                    artist = track.artist,
-                    thumbnailUrl = track.thumbnailUrl,
-                    position = index
-                )
+        try {
+            val statePrefs = getApplication<Application>().getSharedPreferences("playback_state", Context.MODE_PRIVATE)
+            statePrefs.edit().apply {
+                putString("queue_json", queueManager.serialize())
+                putInt("queue_index", queueManager.getCurrentIndex())
+                apply()
             }
-            trackDao.insertQueue(queueEntities)
+            
+            // Save to Database for deep restoration safely
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    trackDao.clearQueue()
+                    val queueEntities = queueManager.queue.value.mapIndexed { index, track ->
+                        com.ansh.ytmusicpreimum.data.QueueEntity(
+                            trackId = track.id,
+                            title = track.title,
+                            artist = track.artist,
+                            thumbnailUrl = track.thumbnailUrl,
+                            position = index
+                        )
+                    }
+                    trackDao.insertQueue(queueEntities)
+                } catch (t: Throwable) {
+                    android.util.Log.w("MusicViewModel", "Failed to persist queue to database", t)
+                }
+            }
+        } catch (t: Throwable) {
+            android.util.Log.w("MusicViewModel", "Failed to save queue state", t)
         }
     }
 
@@ -367,43 +375,55 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun restorePlaybackState() {
-        val statePrefs = getApplication<Application>().getSharedPreferences("playback_state", Context.MODE_PRIVATE)
-        val lastMediaId = statePrefs.getString("last_media_id", null) ?: return
-        
-        val title = statePrefs.getString("last_title", "Unknown") ?: "Unknown"
-        val artist = statePrefs.getString("last_artist", "Unknown") ?: "Unknown"
-        val artwork = statePrefs.getString("last_artwork", "") ?: ""
-        val position = statePrefs.getLong("last_position", 0L)
-        val shuffle = statePrefs.getBoolean("shuffle_enabled", false)
-        val repeat = statePrefs.getInt("repeat_mode", Player.REPEAT_MODE_OFF)
-        val queueJson = statePrefs.getString("queue_json", null)
-        val queueIndex = statePrefs.getInt("queue_index", -1)
+        try {
+            val statePrefs = getApplication<Application>().getSharedPreferences("playback_state", Context.MODE_PRIVATE)
+            val lastMediaId = statePrefs.getString("last_media_id", null) ?: return
+            
+            val title = statePrefs.getString("last_title", "Unknown") ?: "Unknown"
+            val artist = statePrefs.getString("last_artist", "Unknown") ?: "Unknown"
+            val artwork = statePrefs.getString("last_artwork", "") ?: ""
+            val position = statePrefs.getLong("last_position", 0L)
+            val shuffle = statePrefs.getBoolean("shuffle_enabled", false)
+            val repeat = statePrefs.getInt("repeat_mode", Player.REPEAT_MODE_OFF)
+            val queueJson = statePrefs.getString("queue_json", null)
+            val queueIndex = statePrefs.getInt("queue_index", -1)
 
-        queueJson?.let {
-            queueManager.deserialize(it, queueIndex)
+            queueJson?.let {
+                try {
+                    queueManager.deserialize(it, queueIndex)
+                } catch (t: Throwable) {
+                    android.util.Log.w("MusicViewModel", "Failed to deserialize queue", t)
+                }
+            }
+
+            val cleanTitle = YouTubeExtractor.cleanSongTitle(title)
+            val cleanArtist = YouTubeExtractor.cleanArtistName(title, artist)
+
+            val metadataBuilder = androidx.media3.common.MediaMetadata.Builder()
+                .setTitle(cleanTitle)
+                .setArtist(cleanArtist)
+
+            if (!artwork.isNullOrBlank()) {
+                try {
+                    metadataBuilder.setArtworkUri(android.net.Uri.parse(artwork))
+                } catch (t: Throwable) {}
+            }
+            
+            val restoredItem = MediaItem.Builder()
+                .setMediaId(lastMediaId)
+                .setMediaMetadata(metadataBuilder.build())
+                .build()
+            
+            _currentMediaItem.value = restoredItem
+            _currentPosition.value = position
+            _shuffleModeEnabled.value = shuffle
+            _repeatMode.value = repeat
+            
+            // We don't auto-play on restore, just set the metadata so it shows in UI
+            android.util.Log.d("MusicViewModel", "Restored playback state: $title")
+        } catch (t: Throwable) {
+            android.util.Log.e("MusicViewModel", "Failed to restore playback state safely", t)
         }
-
-        val cleanTitle = YouTubeExtractor.cleanSongTitle(title)
-        val cleanArtist = YouTubeExtractor.cleanArtistName(title, artist)
-
-        val metadata = androidx.media3.common.MediaMetadata.Builder()
-            .setTitle(cleanTitle)
-            .setArtist(cleanArtist)
-            .setArtworkUri(android.net.Uri.parse(artwork))
-            .build()
-        
-        val restoredItem = MediaItem.Builder()
-            .setMediaId(lastMediaId)
-            .setMediaMetadata(metadata)
-            .build()
-        
-        _currentMediaItem.value = restoredItem
-        _currentPosition.value = position
-        _shuffleModeEnabled.value = shuffle
-        _repeatMode.value = repeat
-        
-        // We don't auto-play on restore, just set the metadata so it shows in UI
-        android.util.Log.d("MusicViewModel", "Restored playback state: $title")
     }
 
     fun initController(context: Context) {

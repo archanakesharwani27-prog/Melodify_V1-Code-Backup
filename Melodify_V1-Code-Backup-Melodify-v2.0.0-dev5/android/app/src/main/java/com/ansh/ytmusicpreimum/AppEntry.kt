@@ -37,7 +37,7 @@ fun MelodifyApp() {
         label = "SplashTransition"
     ) { isSplashScreen ->
         if (isSplashScreen) {
-            val showNameIntro = loginViewModel.shouldShowNameIntro()
+            val showNameIntro = try { loginViewModel.shouldShowNameIntro() } catch (t: Throwable) { false }
             val name = loginViewModel.userName.collectAsState().value ?: ""
 
             SplashScreen(

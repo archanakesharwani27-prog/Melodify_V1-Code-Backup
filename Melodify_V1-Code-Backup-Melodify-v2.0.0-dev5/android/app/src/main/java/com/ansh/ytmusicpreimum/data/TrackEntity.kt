@@ -58,10 +58,10 @@ data class SearchHistoryEntity(
 
 @Entity(tableName = "stream_cache")
 data class StreamCacheEntity(
-    @PrimaryKey val videoId: String,
-    val streamUrl: String,
-    val expiryTime: Long,
-    val quality: String
+    @PrimaryKey val videoId: String = "",
+    val streamUrl: String = "",
+    val expiryTime: Long = 0L,
+    val quality: String = ""
 )
 
 @Immutable
@@ -76,19 +76,19 @@ data class QueueEntity(
 
 @Entity(tableName = "lyrics_cache")
 data class LyricsEntity(
-    @PrimaryKey val videoId: String,
-    val lyrics: String,
-    val isSynced: Boolean,
-    val expiryTime: Long
+    @PrimaryKey val videoId: String = "",
+    val lyrics: String = "",
+    val isSynced: Boolean = false,
+    val expiryTime: Long = 0L
 )
 
 @Entity(tableName = "equalizer_presets")
 data class EqualizerPresetEntity(
-    @PrimaryKey val name: String,
-    val bandLevels: String, // Comma separated shorts
-    val bassBoost: Short,
-    val virtualizer: Short,
-    val loudness: Int,
+    @PrimaryKey val name: String = "",
+    val bandLevels: String = "", // Comma separated shorts
+    val bassBoost: Short = 0,
+    val virtualizer: Short = 0,
+    val loudness: Int = 0,
     val isCustom: Boolean = true
 )
 

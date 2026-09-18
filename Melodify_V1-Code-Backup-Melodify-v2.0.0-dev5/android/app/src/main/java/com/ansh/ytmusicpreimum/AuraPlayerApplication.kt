@@ -7,44 +7,81 @@ import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import org.schabi.newpipe.extractor.NewPipe
 import com.ansh.ytmusicpreimum.data.AppDatabase
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class MelodifyApplication : Application() {
-    private val appScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        android.util.Log.e("MelodifyApplication", "CoroutineExceptionHandler caught error", throwable)
+    }
+    private val appScope = CoroutineScope(Dispatchers.IO + SupervisorJob() + exceptionHandler)
 
     override fun onCreate() {
         super.onCreate()
-        // Initialize NewPipe downloader immediately to prevent race conditions on startup
+
+        // Install crash logger to prevent silent process termination and record diagnostics
+        try {
+            val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+            Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+                android.util.Log.e("MelodifyCrash", "FATAL UNCAUGHT EXCEPTION on thread ${thread.name}", throwable)
+                try {
+                    val crashFile = java.io.File(filesDir, "last_crash.txt")
+                    crashFile.writeText("Thread: ${thread.name}\nTime: ${java.util.Date()}\nError: ${android.util.Log.getStackTraceString(throwable)}")
+                } catch (ignored: Throwable) {}
+                defaultHandler?.uncaughtException(thread, throwable)
+            }
+        } catch (t: Throwable) {
+            android.util.Log.e("MelodifyApplication", "Failed to install crash handler", t)
+        }
+
+        // 1. Initialize Firebase first and protect with try-catch
+        try {
+            FirebaseApp.initializeApp(this)
+        } catch (t: Throwable) {
+            android.util.Log.e("MelodifyApplication", "FirebaseApp.initializeApp failed", t)
+        }
+
+        // 2. Initialize App Check with fallback and protect with try-catch
+        try {
+            val firebaseAppCheck = FirebaseAppCheck.getInstance()
+            if (BuildConfig.DEBUG) {
+                firebaseAppCheck.installAppCheckProviderFactory(
+                    DebugAppCheckProviderFactory.getInstance()
+                )
+            } else {
+                firebaseAppCheck.installAppCheckProviderFactory(
+                    PlayIntegrityAppCheckProviderFactory.getInstance()
+                )
+            }
+        } catch (t: Throwable) {
+            android.util.Log.w("MelodifyApplication", "FirebaseAppCheck init skipped or failed", t)
+        }
+
+        // 3. Initialize NewPipe downloader safely
         try {
             NewPipe.init(NewPipeDownloader.getInstance())
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (t: Throwable) {
+            android.util.Log.e("MelodifyApplication", "NewPipe init failed", t)
         }
 
-        // Background initialization for non-critical components to improve startup time
+        // 4. Background initialization for non-critical components
         appScope.launch {
-            val database = AppDatabase.getDatabase(this@MelodifyApplication)
-            YouTubeExtractor.init(database.trackDao())
-            LyricsManager.init(database.trackDao())
-            DynamicCipherManager.init()
-        }
+            try {
+                val database = AppDatabase.getDatabase(this@MelodifyApplication)
+                YouTubeExtractor.init(database.trackDao())
+                LyricsManager.init(database.trackDao())
+            } catch (t: Throwable) {
+                android.util.Log.e("MelodifyApplication", "Database / extractor background init failed", t)
+            }
 
-        // Initialize Firebase (Keep on main thread as per Google recommendations for stability)
-        FirebaseApp.initializeApp(this)
-        
-        // Initialize App Check with Debug support
-        val firebaseAppCheck = FirebaseAppCheck.getInstance()
-        if (BuildConfig.DEBUG) {
-            firebaseAppCheck.installAppCheckProviderFactory(
-                DebugAppCheckProviderFactory.getInstance()
-            )
-        } else {
-            firebaseAppCheck.installAppCheckProviderFactory(
-                PlayIntegrityAppCheckProviderFactory.getInstance()
-            )
+            try {
+                DynamicCipherManager.init()
+            } catch (t: Throwable) {
+                android.util.Log.e("MelodifyApplication", "DynamicCipherManager init failed", t)
+            }
         }
     }
 }

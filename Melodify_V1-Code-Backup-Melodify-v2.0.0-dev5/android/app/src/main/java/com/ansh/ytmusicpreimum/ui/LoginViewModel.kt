@@ -19,11 +19,15 @@ import java.util.concurrent.TimeUnit
 
 class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val sharedPrefs = application.getSharedPreferences("auth", Context.MODE_PRIVATE)
-    private var auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private var auth: FirebaseAuth? = null
     private val trackDao = AppDatabase.getDatabase(application).trackDao()
     
     init {
-        auth = FirebaseAuth.getInstance()
+        try {
+            auth = FirebaseAuth.getInstance()
+        } catch (t: Throwable) {
+            android.util.Log.w("LoginViewModel", "FirebaseAuth init skipped or failed", t)
+        }
     }
     
     private val _isLoggedIn = MutableStateFlow(sharedPrefs.getBoolean("is_logged_in", false))
@@ -174,7 +178,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     fun logout(context: Context? = null) {
         viewModelScope.launch(Dispatchers.IO) {
             try { 
-                auth.signOut() 
+                auth?.signOut() 
                 com.ansh.ytmusicpreimum.data.TrackRepository.currentSyncUserId = null
                 context?.let {
                     val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN).build()
@@ -201,7 +205,13 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     fun signUpWithEmail(email: String, pass: String, name: String) {
         _isLoading.value = true
-        auth.createUserWithEmailAndPassword(email, pass).addOnCompleteListener { task ->
+        val firebaseAuth = auth
+        if (firebaseAuth == null) {
+            _isLoading.value = false
+            Toast.makeText(getApplication(), "Authentication service unavailable", Toast.LENGTH_SHORT).show()
+            return
+        }
+        firebaseAuth.createUserWithEmailAndPassword(email, pass).addOnCompleteListener { task ->
             _isLoading.value = false
             if (task.isSuccessful) {
                 onLoginSuccess(name, email, null)
@@ -213,10 +223,16 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     fun signInWithEmail(email: String, pass: String) {
         _isLoading.value = true
-        auth.signInWithEmailAndPassword(email, pass).addOnCompleteListener { task ->
+        val firebaseAuth = auth
+        if (firebaseAuth == null) {
+            _isLoading.value = false
+            Toast.makeText(getApplication(), "Authentication service unavailable", Toast.LENGTH_SHORT).show()
+            return
+        }
+        firebaseAuth.signInWithEmailAndPassword(email, pass).addOnCompleteListener { task ->
             _isLoading.value = false
             if (task.isSuccessful) {
-                val user = auth.currentUser
+                val user = firebaseAuth.currentUser
                 onLoginSuccess(user?.displayName ?: "User", user?.email, user?.photoUrl?.toString())
             } else {
                 Toast.makeText(getApplication(), "Login failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()

@@ -37,7 +37,6 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     val localTracks: StateFlow<List<TrackEntity>> = _localTracks.asStateFlow()
 
     private val trackDao = AppDatabase.getDatabase(application).trackDao()
-    private val auth = FirebaseAuth.getInstance()
 
     init {
         repository = TrackRepository(trackDao)

@@ -290,6 +290,7 @@ fun BrandedBackground(isDarkTheme: Boolean, content: @Composable () -> Unit) {
         .fillMaxSize()
         .background(backgroundBrush)) {
         Canvas(modifier = Modifier.fillMaxSize()) {
+            if (size.width <= 0f || size.height <= 0f) return@Canvas
             val w = size.width
             val h = size.height
             val bokehPoints = listOf(

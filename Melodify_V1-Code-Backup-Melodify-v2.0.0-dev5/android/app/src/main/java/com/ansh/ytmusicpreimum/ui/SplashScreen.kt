@@ -38,9 +38,11 @@ fun SplashScreen(
         try {
             val resId = context.resources.getIdentifier("love_story_intro", "raw", context.packageName)
             if (resId != 0) {
-                MediaPlayer.create(context, resId).apply { setVolume(1.0f, 1.0f) }
+                MediaPlayer.create(context, resId)?.apply { 
+                    try { setVolume(1.0f, 1.0f) } catch (t: Throwable) {}
+                }
             } else null
-        } catch (e: Exception) { null }
+        } catch (e: Throwable) { null }
     }
 
     val tealLogo = Color(0xFF00B29A)
@@ -51,58 +53,88 @@ fun SplashScreen(
     val logoGradient = Brush.linearGradient(colors = listOf(tealLogo, cyanLogo, mintLogo))
 
     LaunchedEffect(Unit) {
-        mediaPlayer?.start()
-        
-        // Logo Animation
-        launch { scale.animateTo(1f, tween(1000, easing = FastOutSlowInEasing)) }
-        pathPortion.animateTo(1f, tween(1500, easing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)))
-
-        launch { fillAlpha.animateTo(1f, tween(1000)) }
-        launch { auraAlpha.animateTo(0.6f, tween(1500)) }
-
-        delay(300)
-        textAlpha.animateTo(1f, tween(800))
-
-        if (showNameIntro && userName.isNotEmpty()) {
-            delay(1000)
-            // Fade out logo text, Fade in User Name
-            textAlpha.animateTo(0f, tween(500))
-            nameAlpha.animateTo(1f, tween(1000))
-            delay(1500)
-        } else {
-            delay(1500)
-        }
-
-        // Fade out Audio & Exit
-        launch {
-            for (i in 20 downTo 0) {
-                val v = i.toFloat() / 20
-                mediaPlayer?.setVolume(v, v)
-                delay(40)
+        try {
+            try { mediaPlayer?.start() } catch (t: Throwable) {}
+            
+            // Logo Animation
+            launch { 
+                try { scale.animateTo(1f, tween(1000, easing = FastOutSlowInEasing)) } catch (t: Throwable) {}
             }
-            mediaPlayer?.stop()
-        }
+            try {
+                pathPortion.animateTo(1f, tween(1500, easing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)))
+            } catch (t: Throwable) {}
 
-        scale.animateTo(1.1f, tween(800))
-        onAnimationFinished()
+            launch { try { fillAlpha.animateTo(1f, tween(1000)) } catch (t: Throwable) {} }
+            launch { try { auraAlpha.animateTo(0.6f, tween(1500)) } catch (t: Throwable) {} }
+
+            delay(300)
+            try { textAlpha.animateTo(1f, tween(800)) } catch (t: Throwable) {}
+
+            if (showNameIntro && userName.isNotEmpty()) {
+                delay(1000)
+                // Fade out logo text, Fade in User Name
+                try { textAlpha.animateTo(0f, tween(500)) } catch (t: Throwable) {}
+                try { nameAlpha.animateTo(1f, tween(1000)) } catch (t: Throwable) {}
+                delay(1500)
+            } else {
+                delay(1500)
+            }
+
+            // Fade out Audio & Exit
+            launch {
+                try {
+                    for (i in 20 downTo 0) {
+                        val v = i.toFloat() / 20
+                        try { mediaPlayer?.setVolume(v, v) } catch (t: Throwable) {}
+                        delay(40)
+                    }
+                    try { mediaPlayer?.stop() } catch (t: Throwable) {}
+                } catch (t: Throwable) {}
+            }
+
+            try { scale.animateTo(1.1f, tween(800)) } catch (t: Throwable) {}
+        } catch (t: Throwable) {
+            android.util.Log.e("SplashScreen", "Animation error in splash screen", t)
+        } finally {
+            onAnimationFinished()
+        }
     }
 
     DisposableEffect(Unit) {
-        onDispose { mediaPlayer?.release() }
+        onDispose {
+            try {
+                mediaPlayer?.release()
+            } catch (t: Throwable) {}
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(darkBlueBg), contentAlignment = Alignment.Center) {
         // Aura
         Canvas(modifier = Modifier.size(500.dp)) {
-            drawCircle(
-                brush = Brush.radialGradient(colors = listOf(cyanLogo.copy(alpha = 0.2f * auraAlpha.value), Color.Transparent), center = center, radius = size.width / 2),
-                radius = size.width * 0.4f * auraAlpha.value
-            )
+            if (size.width <= 0f || size.height <= 0f || auraAlpha.value <= 0.001f) return@Canvas
+            val radius = (size.width * 0.4f * auraAlpha.value).coerceAtLeast(0.1f)
+            val gradRadius = (size.width / 2f).coerceAtLeast(1f)
+            try {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(cyanLogo.copy(alpha = 0.2f * auraAlpha.value), Color.Transparent),
+                        center = center,
+                        radius = gradRadius
+                    ),
+                    radius = radius
+                )
+            } catch (t: Throwable) {
+                drawCircle(
+                    color = cyanLogo.copy(alpha = 0.05f * auraAlpha.value),
+                    radius = radius
+                )
+            }
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.graphicsLayer(scaleX = scale.value, scaleY = scale.value)) {
             Box(modifier = Modifier.size(180.dp), contentAlignment = Alignment.Center) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
+                    if (size.width <= 0f || size.height <= 0f) return@Canvas
                     val w = size.width
                     val h = size.height
                     val mainPath = Path().apply {
@@ -114,11 +146,40 @@ fun SplashScreen(
                     val leftWave = Path().apply { moveTo(w * 0.12f, h * 0.45f); cubicTo(w * 0.05f, h * 0.5f, w * 0.05f, h * 0.6f, w * 0.12f, h * 0.65f) }
                     val rightWave = Path().apply { moveTo(w * 0.88f, h * 0.45f); cubicTo(w * 0.95f, h * 0.5f, w * 0.95f, h * 0.6f, w * 0.88f, h * 0.65f) }
                     val pathMeasure = PathMeasure(); pathMeasure.setPath(mainPath, false); val length = pathMeasure.length
-                    drawPath(path = mainPath, brush = logoGradient, alpha = fillAlpha.value)
-                    drawPath(path = mainPath, color = cyanLogo, style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round, pathEffect = PathEffect.dashPathEffect(floatArrayOf(length, length), (1f - pathPortion.value) * length)))
+                    
+                    try {
+                        drawPath(path = mainPath, brush = logoGradient, alpha = fillAlpha.value)
+                    } catch (t: Throwable) {}
+
+                    if (length > 1f) {
+                        try {
+                            val phase = ((1f - pathPortion.value) * length).coerceAtLeast(0f)
+                            drawPath(
+                                path = mainPath,
+                                color = cyanLogo,
+                                style = Stroke(
+                                    width = 5.dp.toPx(),
+                                    cap = StrokeCap.Round,
+                                    join = StrokeJoin.Round,
+                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(length, length), phase)
+                                )
+                            )
+                        } catch (t: Throwable) {
+                            try {
+                                drawPath(path = mainPath, color = cyanLogo, style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                            } catch (e: Throwable) {}
+                        }
+                    } else {
+                        try {
+                            drawPath(path = mainPath, color = cyanLogo, style = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                        } catch (t: Throwable) {}
+                    }
+
                     if (fillAlpha.value > 0.1f) {
-                        drawPath(leftWave, mintLogo, fillAlpha.value * 0.5f, Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round))
-                        drawPath(rightWave, mintLogo, fillAlpha.value * 0.5f, Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round))
+                        try {
+                            drawPath(leftWave, mintLogo, fillAlpha.value * 0.5f, Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round))
+                            drawPath(rightWave, mintLogo, fillAlpha.value * 0.5f, Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round))
+                        } catch (t: Throwable) {}
                     }
                 }
             }
