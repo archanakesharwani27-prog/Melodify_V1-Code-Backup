@@ -97,9 +97,68 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         loadHomeData(force = true)
     }
 
+    private fun getTimeOfDayMelodifySeed(): String {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val morningSeeds = listOf(
+            "Acoustic Hindi Morning Melodies",
+            "Fresh Bollywood Morning Hits",
+            "Sufi Morning Soul Chill",
+            "Arijit Singh Morning Acoustic"
+        )
+        val afternoonSeeds = listOf(
+            "Bollywood Indie Pop Gems",
+            "Coke Studio Bharat Hits",
+            "Lo-Fi Hindi Pop Hits",
+            "Trending Hindi Indie Beats"
+        )
+        val eveningSeeds = listOf(
+            "Sunset Drive Bollywood Hits",
+            "Bollywood Romantic Evening Vibes",
+            "Unplugged Bollywood Acoustic",
+            "Soulful Bollywood Evening Melodies"
+        )
+        val nightSeeds = listOf(
+            "Late Night Bollywood Lo-Fi",
+            "Midnight Acoustic Hindi Soul",
+            "Midnight Chill Hop Hindi",
+            "Diljit & Arijit Midnight Acoustic"
+        )
+
+        val seedList = when (hour) {
+            in 5..11 -> morningSeeds
+            in 12..16 -> afternoonSeeds
+            in 17..20 -> eveningSeeds
+            else -> nightSeeds
+        }
+        return seedList.random()
+    }
+
+    fun refreshMelodifyPicks() {
+        viewModelScope.launch {
+            try {
+                val seed = getTimeOfDayMelodifySeed()
+                val picks = YouTubeExtractor.search(seed)
+                val enrichedPicks = repository.enrichTracks(picks.shuffled().take(10))
+                if (enrichedPicks.isNotEmpty()) {
+                    val current = _curatedSections.value.toMutableList()
+                    val index = current.indexOfFirst { it.first == "Melodify Picks" }
+                    if (index >= 0) {
+                        current[index] = "Melodify Picks" to enrichedPicks
+                    } else {
+                        current.add(0, "Melodify Picks" to enrichedPicks)
+                    }
+                    _curatedSections.value = current
+                    _uiState.value = _uiState.value.copy(curatedSections = current)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("HomeViewModel", "Error refreshing Melodify Picks", e)
+            }
+        }
+    }
+
     private fun loadHomeData(force: Boolean = false) {
         val currentTime = System.currentTimeMillis()
-        if (!force && _trendingSongs.value.isNotEmpty() && (currentTime - lastRefreshTime < 14400000)) {
+        if (!force && _trendingSongs.value.isNotEmpty() && (currentTime - lastRefreshTime < 1800000)) { // 30 min cache
             return
         }
 
@@ -174,8 +233,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         val topIndia = YouTubeExtractor.search("Top 50 Songs India")
                         _globalHits.value = listOf("Top India" to repository.enrichTracks(topIndia))
 
+                        val dynamicPicksSeed = getTimeOfDayMelodifySeed()
                         val curatedQueries = listOf(
-                            "Coke Studio Bharat Hits",
+                            dynamicPicksSeed,
                             "Indie Hindi Gems 2024",
                             "Bollywood Lo-fi Mashup 1 hour"
                         )

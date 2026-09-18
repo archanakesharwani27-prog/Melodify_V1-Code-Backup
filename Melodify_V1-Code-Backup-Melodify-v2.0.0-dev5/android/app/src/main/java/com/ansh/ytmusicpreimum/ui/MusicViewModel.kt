@@ -3,6 +3,7 @@ package com.ansh.ytmusicpreimum.ui
 import android.app.Application
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
@@ -122,13 +123,197 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _audioQuality = MutableStateFlow(sharedPrefs.getString("audio_quality", "Medium") ?: "Medium")
     val audioQuality: StateFlow<String> = _audioQuality
 
+    private val _videoQuality = MutableStateFlow(sharedPrefs.getString("video_quality", "720p") ?: "720p")
+    val videoQuality: StateFlow<String> = _videoQuality.asStateFlow()
+
+    private val _isVideoMode = MutableStateFlow(false)
+    val isVideoMode: StateFlow<Boolean> = _isVideoMode.asStateFlow()
+
+    private val _videoUrl = MutableStateFlow<String?>(null)
+    val videoUrl: StateFlow<String?> = _videoUrl.asStateFlow()
+
+    private val _relatedTracks = MutableStateFlow<List<TrackEntity>>(emptyList())
+    val relatedTracks: StateFlow<List<TrackEntity>> = _relatedTracks.asStateFlow()
+
+    private val _isLoadingRelated = MutableStateFlow(false)
+    val isLoadingRelated: StateFlow<Boolean> = _isLoadingRelated.asStateFlow()
+
+    private val _mediaControllerState = MutableStateFlow<MediaController?>(null)
+    val mediaControllerState: StateFlow<MediaController?> = _mediaControllerState.asStateFlow()
+
     private val _crossfadeDuration = MutableStateFlow(sharedPrefs.getLong("crossfade_duration", 0L))
     val crossfadeDuration: StateFlow<Long> = _crossfadeDuration
+
+    fun setVideoQuality(quality: String) {
+        _videoQuality.value = quality
+        sharedPrefs.edit().putString("video_quality", quality).apply()
+        val currentId = _currentMediaItem.value?.mediaId ?: return
+        if (_isVideoMode.value && !currentId.startsWith("content://") && !currentId.startsWith("file://")) {
+            val ctrl = _controller ?: return
+            val pos = ctrl.currentPosition
+            val wasPlaying = ctrl.isPlaying
+            viewModelScope.launch {
+                _isBuffering.value = true
+                val vUrl = YouTubeExtractor.getVideoUrl(currentId, quality)
+                _videoUrl.value = vUrl
+                if (vUrl != null && _isVideoMode.value) {
+                    val currentItem = ctrl.currentMediaItem
+                    if (currentItem != null) {
+                        val videoItem = currentItem.buildUpon().setUri(vUrl).build()
+                        ctrl.setMediaItem(videoItem, pos)
+                        ctrl.prepare()
+                        if (wasPlaying) ctrl.play()
+                    }
+                }
+                _isBuffering.value = false
+            }
+        }
+    }
+
+    fun setAudioQuality(quality: String) {
+        _audioQuality.value = quality
+        sharedPrefs.edit().putString("audio_quality", quality).apply()
+        urlCache.clear()
+        val currentId = _currentMediaItem.value?.mediaId ?: return
+        if (!_isVideoMode.value && !currentId.startsWith("content://") && !currentId.startsWith("file://")) {
+            val ctrl = _controller ?: return
+            val pos = ctrl.currentPosition
+            val wasPlaying = ctrl.isPlaying
+            viewModelScope.launch {
+                _isBuffering.value = true
+                val aUrl = YouTubeExtractor.getAudioUrl(currentId, quality)
+                if (aUrl != null && !_isVideoMode.value) {
+                    val currentItem = ctrl.currentMediaItem
+                    if (currentItem != null) {
+                        val audioItem = currentItem.buildUpon().setUri(aUrl).build()
+                        ctrl.setMediaItem(audioItem, pos)
+                        ctrl.prepare()
+                        if (wasPlaying) ctrl.play()
+                    }
+                }
+                _isBuffering.value = false
+            }
+        }
+    }
+
+    fun setVideoMode(enabled: Boolean) {
+        if (_isVideoMode.value == enabled) return
+        _isVideoMode.value = enabled
+        val currentId = _currentMediaItem.value?.mediaId ?: return
+        if (currentId.startsWith("content://") || currentId.startsWith("file://")) return
+
+        val ctrl = _controller ?: return
+        val pos = ctrl.currentPosition
+        val wasPlaying = ctrl.isPlaying
+
+        viewModelScope.launch {
+            if (enabled) {
+                _isBuffering.value = true
+                val vUrl = YouTubeExtractor.getVideoUrl(currentId, _videoQuality.value)
+                _videoUrl.value = vUrl
+                if (vUrl != null && _isVideoMode.value) {
+                    val currentItem = ctrl.currentMediaItem
+                    if (currentItem != null) {
+                        val videoItem = currentItem.buildUpon().setUri(vUrl).build()
+                        ctrl.setMediaItem(videoItem, pos)
+                        ctrl.prepare()
+                        if (wasPlaying) ctrl.play()
+                    }
+                }
+                _isBuffering.value = false
+            } else {
+                _isBuffering.value = true
+                _videoUrl.value = null
+                val aUrl = YouTubeExtractor.getAudioUrl(currentId, _audioQuality.value)
+                if (aUrl != null && !_isVideoMode.value) {
+                    val currentItem = ctrl.currentMediaItem
+                    if (currentItem != null) {
+                        val audioItem = currentItem.buildUpon().setUri(aUrl).build()
+                        ctrl.setMediaItem(audioItem, pos)
+                        ctrl.prepare()
+                        if (wasPlaying) ctrl.play()
+                    }
+                }
+                _isBuffering.value = false
+            }
+        }
+    }
+
+    fun toggleVideoMode() {
+        setVideoMode(!_isVideoMode.value)
+    }
+
+    fun loadRelatedTracks(videoId: String, artist: String, title: String) {
+        if (videoId.startsWith("content://") || videoId.startsWith("file://")) {
+            _relatedTracks.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            _isLoadingRelated.value = true
+            try {
+                val related = YouTubeExtractor.getRelatedTracks(videoId, artist, title)
+                val enriched = repository.enrichTracks(related)
+                _relatedTracks.value = enriched
+                
+                val currentQ = queueManager.queue.value
+                if (currentQ.size <= 1 && enriched.isNotEmpty()) {
+                    val currentTrack = currentQ.firstOrNull() ?: TrackEntity(
+                        id = videoId,
+                        title = title,
+                        artist = artist,
+                        thumbnailUrl = _currentMediaItem.value?.mediaMetadata?.artworkUri?.toString() ?: ""
+                    )
+                    queueManager.setQueue(listOf(currentTrack) + enriched, videoId)
+                    prefetchNext()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MusicViewModel", "Error loading related tracks", e)
+            } finally {
+                _isLoadingRelated.value = false
+            }
+        }
+    }
+
+    fun playRelatedTrack(track: TrackEntity) {
+        val currentList = _relatedTracks.value
+        playSong(
+            videoId = track.id,
+            title = track.title,
+            artist = track.artist,
+            artworkUrl = track.thumbnailUrl,
+            otherTracks = currentList,
+            userTier = this.userTier,
+            canCacheLyrics = this.canCacheLyrics
+        )
+    }
+
+    private val skipReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                "com.ansh.ytmusicpreimum.ACTION_SKIP_NEXT" -> skipNext(userTier)
+                "com.ansh.ytmusicpreimum.ACTION_SKIP_PREV" -> skipPrevious(userTier)
+            }
+        }
+    }
 
     init {
         restorePlaybackState()
         startProgressUpdate()
         
+        try {
+            val filter = android.content.IntentFilter().apply {
+                addAction("com.ansh.ytmusicpreimum.ACTION_SKIP_NEXT")
+                addAction("com.ansh.ytmusicpreimum.ACTION_SKIP_PREV")
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                getApplication<Application>().registerReceiver(skipReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                getApplication<Application>().registerReceiver(skipReceiver, filter)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MusicViewModel", "Failed to register skipReceiver", e)
+        }
+
         viewModelScope.launch {
             currentQueue.collect {
                 saveQueueState()
@@ -174,11 +359,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _isPlaying.value = false
     }
 
-    fun setAudioQuality(quality: String) {
-        _audioQuality.value = quality
-        sharedPrefs.edit().putString("audio_quality", quality).apply()
-        urlCache.clear() // Clear cache to fetch new quality next time
-    }
 
     fun setCrossfadeDuration(duration: Long) {
         _crossfadeDuration.value = duration
@@ -202,9 +382,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             queueManager.deserialize(it, queueIndex)
         }
 
+        val cleanTitle = YouTubeExtractor.cleanSongTitle(title)
+        val cleanArtist = YouTubeExtractor.cleanArtistName(title, artist)
+
         val metadata = androidx.media3.common.MediaMetadata.Builder()
-            .setTitle(title)
-            .setArtist(artist)
+            .setTitle(cleanTitle)
+            .setArtist(cleanArtist)
             .setArtworkUri(android.net.Uri.parse(artwork))
             .build()
         
@@ -235,6 +418,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 val controller = controllerFuture?.get()
                 if (controller != null) {
                     _controller = controller
+                    _mediaControllerState.value = controller
                     _volume.value = controller.volume
                     android.util.Log.d("MusicViewModel", "MediaController connected successfully. Session: ${controller.connectedToken}")
                     
@@ -307,6 +491,19 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
                             if (playbackState == Player.STATE_READY) {
                                 _duration.value = controller.duration.coerceAtLeast(0L)
+                                val durSec = (controller.duration / 1000).toInt()
+                                if (durSec > 0) {
+                                    val currentTrack = _currentMediaItem.value
+                                    val currentLyrics = _lyrics.value
+                                    if (currentTrack != null && (!currentLyrics.isSynced || currentLyrics.lines.isEmpty())) {
+                                        fetchLyrics(
+                                            currentTrack.mediaId,
+                                            currentTrack.mediaMetadata.title?.toString() ?: "",
+                                            currentTrack.mediaMetadata.artist?.toString() ?: "",
+                                            durSec
+                                        )
+                                    }
+                                }
                             }
                             if (playbackState == Player.STATE_ENDED) {
                                 skipNext()
@@ -365,7 +562,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     _currentPosition.value = it.currentPosition
                 }
-                delay(500)
+                delay(if (_isPlaying.value) 100L else 500L)
             }
         }
     }
@@ -379,9 +576,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         lastManualPlayTime = System.currentTimeMillis()
         isPreparingManually = true
         
+        val cleanTitle = YouTubeExtractor.cleanSongTitle(title)
+        val cleanArtist = YouTubeExtractor.cleanArtistName(title, artist)
+
         // Record History & Playback (Async)
         viewModelScope.launch(Dispatchers.IO) {
-            repository.addToHistory(TrackEntity(id = videoId, title = title, artist = artist, thumbnailUrl = artworkUrl))
+            repository.addToHistory(TrackEntity(id = videoId, title = cleanTitle, artist = cleanArtist, thumbnailUrl = artworkUrl))
             trackDao.incrementPlayCount(videoId)
         }
 
@@ -389,8 +589,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val finalQuality = if (userTier >= 2) _audioQuality.value else "Medium"
         
         val metadata = androidx.media3.common.MediaMetadata.Builder()
-            .setTitle(title)
-            .setArtist(artist)
+            .setTitle(cleanTitle)
+            .setArtist(cleanArtist)
             .setArtworkUri(android.net.Uri.parse(artworkUrl))
             .setExtras(Bundle().apply { putString("quality", finalQuality) })
             .build()
@@ -416,11 +616,24 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 queueManager.setQueue(otherTracks, videoId)
             }
 
-            // Fetch lyrics in background
+            // Fetch lyrics in background unconditionally for all users
             launch {
-                if (userTier >= 2 || canCacheLyrics) {
-                    fetchLyrics(videoId, title, artist)
+                fetchLyrics(videoId, title, artist)
+            }
+
+            // Fetch Spotify-style related tracks
+            launch {
+                loadRelatedTracks(videoId, artist, title)
+            }
+
+            // Pre-fetch video stream if user is in video mode
+            if (_isVideoMode.value && !videoId.startsWith("content://") && !videoId.startsWith("file://")) {
+                launch {
+                    val vUrl = YouTubeExtractor.getVideoUrl(videoId, _videoQuality.value)
+                    _videoUrl.value = vUrl
                 }
+            } else {
+                _videoUrl.value = null
             }
 
             try {
@@ -701,12 +914,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         downloadManager.cancelDownload(songId)
     }
 
-    private fun fetchLyrics(videoId: String, title: String, artist: String) {
+    fun fetchLyrics(videoId: String, title: String, artist: String, durationSeconds: Int = 0) {
         viewModelScope.launch {
             _lyrics.value = LyricsState(isLoading = true)
             _isFetchingLyrics.value = true
             try {
-                val state = LyricsManager.getLyrics(videoId, title, artist)
+                val dur = if (durationSeconds > 0) durationSeconds else (_duration.value / 1000).toInt()
+                val state = LyricsManager.getLyrics(videoId, title, artist, dur)
                 _lyrics.value = state
             } catch (e: Exception) {
                 android.util.Log.e("MusicViewModel", "Error fetching lyrics", e)
@@ -744,8 +958,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             controller.addMediaItem(nextItem)
         }
     }
-        override fun onCleared() {
+    override fun onCleared() {
         super.onCleared()
+        try {
+            getApplication<Application>().unregisterReceiver(skipReceiver)
+        } catch (e: Exception) {
+            // Receiver might not be registered
+        }
         controllerFuture?.let {
             MediaController.releaseFuture(it)
         }

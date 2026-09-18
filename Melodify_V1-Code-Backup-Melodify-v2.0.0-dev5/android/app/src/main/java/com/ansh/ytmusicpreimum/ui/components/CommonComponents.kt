@@ -36,9 +36,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
-import com.ansh.ytmusicpreimum.ui.theme.GrayText
+import com.ansh.ytmusicpreimum.ui.theme.*
 
 const val MotionSmall = 150
 const val MotionMedium = 250
@@ -49,28 +50,57 @@ val PremiumEasing = FastOutSlowInEasing
 fun SectionTitle(title: String, icon: ImageVector, onViewAll: (() -> Unit)? = null) {
     Row(
         verticalAlignment = Alignment.CenterVertically, 
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 12.dp)
+        modifier = Modifier.padding(start = 20.dp, end = 16.dp, top = 24.dp, bottom = 12.dp)
     ) {
-        Icon(
-            icon, 
-            contentDescription = null, 
-            tint = MaterialTheme.colorScheme.primary, 
-            modifier = Modifier.size(24.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(com.ansh.ytmusicpreimum.ui.theme.GeminiBlue.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon, 
+                contentDescription = null, 
+                tint = com.ansh.ytmusicpreimum.ui.theme.GeminiBlue, 
+                modifier = Modifier.size(18.dp)
+            )
+        }
         Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = title, 
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold), 
-            color = MaterialTheme.colorScheme.onBackground,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            ), 
+            color = com.ansh.ytmusicpreimum.ui.theme.GeminiTextPrimary,
             modifier = Modifier.weight(1f)
         )
         if (onViewAll != null) {
-            IconButton(onClick = onViewAll) {
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight, 
-                    contentDescription = "View All",
-                    tint = GrayText
-                )
+            Surface(
+                onClick = onViewAll,
+                shape = RoundedCornerShape(14.dp),
+                color = com.ansh.ytmusicpreimum.ui.theme.GeminiCardHover,
+                modifier = Modifier.height(28.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 10.dp)
+                ) {
+                    Text(
+                        text = "See all", 
+                        fontSize = 12.sp, 
+                        fontWeight = FontWeight.SemiBold, 
+                        color = com.ansh.ytmusicpreimum.ui.theme.GeminiBlue
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight, 
+                        contentDescription = "View All",
+                        tint = com.ansh.ytmusicpreimum.ui.theme.GeminiBlue,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
         }
     }

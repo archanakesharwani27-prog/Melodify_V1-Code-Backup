@@ -3,6 +3,7 @@
 package com.ansh.ytmusicpreimum.ui.screens.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -79,13 +80,17 @@ fun HomeScreen(
         contentPadding = PaddingValues(bottom = 100.dp)
     ) {
         // 1. GREETING
-        item { HomeHeader(homeViewModel) }
+        item { HomeHeader(homeViewModel, onSearchClick = { onGenreClick("Search") }) }
 
         // 2. MELODIFY PICKS (Hero)
         item {
             val picks = curatedSections.find { it.first == "Melodify Picks" }?.second ?: emptyList()
             if (picks.isNotEmpty()) {
-                CuratedHeroSection(tracks = picks, onSongPlay = onSongPlay)
+                CuratedHeroSection(
+                    tracks = picks,
+                    onRefreshPicks = { homeViewModel.refreshMelodifyPicks() },
+                    onSongPlay = onSongPlay
+                )
             }
         }
 
@@ -260,7 +265,10 @@ fun HomeScreen(
 }
 
 @Composable
-fun HomeHeader(homeViewModel: HomeViewModel = viewModel(), loginViewModel: LoginViewModel = viewModel()) {
+fun HomeHeader(
+    homeViewModel: HomeViewModel = viewModel(),
+    onSearchClick: () -> Unit = {}
+) {
     val greeting = remember {
         val calendar = java.util.Calendar.getInstance()
         when (calendar.get(java.util.Calendar.HOUR_OF_DAY)) {
@@ -270,49 +278,75 @@ fun HomeHeader(homeViewModel: HomeViewModel = viewModel(), loginViewModel: Login
             else -> "Good Night"
         }
     }
-    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "MELODIFY", 
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp
-                    ), 
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-                )
-                Spacer(modifier = Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(GeminiBlue, GeminiPurple, GeminiPink)
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = Color.Black,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "MELODIFY", 
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.sp
+                        ), 
+                        color = GeminiBlue
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = greeting, 
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-1).sp
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp
                     ), 
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = GeminiTextPrimary
                 )
             }
             
             Surface(
                 onClick = { homeViewModel.refresh() },
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                color = GeminiCardBg,
                 shape = CircleShape,
-                modifier = Modifier.size(52.dp)
+                border = androidx.compose.foundation.BorderStroke(1.dp, GeminiBorder),
+                modifier = Modifier.size(46.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Default.Refresh, 
                         contentDescription = "Refresh", 
-                        tint = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.size(22.dp)
+                        tint = GeminiTextPrimary,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
             }
         }
+
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            text = "Your daily dose of music is ready.", 
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), 
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            text = "What would you like to listen to today?", 
+            style = MaterialTheme.typography.bodyMedium, 
+            color = GeminiTextSecondary
         )
     }
 }
@@ -320,94 +354,168 @@ fun HomeHeader(homeViewModel: HomeViewModel = viewModel(), loginViewModel: Login
 @Composable
 fun GenreRow(onGenreClick: (String) -> Unit) {
     val genres = listOf(
-        "Bollywood" to GenreBollywood, 
-        "Punjabi" to GenrePunjabi, 
-        "Romantic" to GenreRomantic, 
-        "English Pop" to GenreEnglishPop, 
-        "Dance/Party" to GenreDanceParty
+        "🔥 Trending" to "Trending", 
+        "💖 Romantic" to "Romantic", 
+        "🎧 Bollywood" to "Bollywood", 
+        "⚡ Party" to "Party", 
+        "☕ Chill" to "Chill",
+        "🧘 Focus" to "Focus",
+        "✨ Punjabi" to "Punjabi"
     )
     LazyRow(
-        contentPadding = PaddingValues(horizontal = 16.dp), 
-        horizontalArrangement = Arrangement.spacedBy(12.dp), 
-        modifier = Modifier.padding(vertical = 12.dp)
+        contentPadding = PaddingValues(horizontal = 20.dp), 
+        horizontalArrangement = Arrangement.spacedBy(10.dp), 
+        modifier = Modifier.padding(vertical = 10.dp)
     ) {
-        items(genres) { (name, color) -> 
-            FilterChip(
-                selected = false,
+        items(genres) { (label, name) -> 
+            Surface(
                 onClick = { onGenreClick(name) },
-                label = { Text(text = name, fontWeight = FontWeight.SemiBold) },
-                colors = FilterChipDefaults.filterChipColors(
-                    containerColor = color.copy(alpha = 0.15f),
-                    labelColor = color
-                ),
-                border = FilterChipDefaults.filterChipBorder(
-                    enabled = true,
-                    selected = false,
-                    borderColor = color.copy(alpha = 0.3f)
-                ),
-                shape = RoundedCornerShape(12.dp)
-            )
+                shape = RoundedCornerShape(20.dp),
+                color = GeminiCardBg,
+                border = androidx.compose.foundation.BorderStroke(1.dp, GeminiBorder.copy(alpha = 0.8f))
+            ) {
+                Text(
+                    text = label, 
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    color = GeminiTextPrimary,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                )
+            }
         }
     }
 }
 
 @Composable
-fun CuratedHeroSection(tracks: List<TrackEntity>, onSongPlay: (TrackEntity, List<TrackEntity>) -> Unit) {
+fun CuratedHeroSection(
+    tracks: List<TrackEntity>, 
+    onRefreshPicks: () -> Unit,
+    onSongPlay: (TrackEntity, List<TrackEntity>) -> Unit
+) {
     if (tracks.isEmpty()) return
     
-    val pagerState = rememberPagerState(pageCount = { tracks.size.coerceAtMost(4) }) 
+    val pagerState = rememberPagerState(pageCount = { tracks.size.coerceAtMost(6) }) 
+    val timeLabel = remember {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        when (hour) {
+            in 5..11 -> "MORNING VIBES"
+            in 12..16 -> "AFTERNOON CHILL"
+            in 17..20 -> "SUNSET MELODIES"
+            else -> "LATE NIGHT SOUL"
+        }
+    }
     
-    Column(modifier = Modifier.padding(vertical = 12.dp)) {
-        SectionTitle("Melodify Picks", icon = Icons.Default.Star)
+    Column(modifier = Modifier.padding(vertical = 10.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.AutoAwesome, 
+                    contentDescription = null, 
+                    tint = GeminiBlue, 
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Melodify Picks",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = GeminiTextPrimary
+                )
+            }
+            Surface(
+                onClick = onRefreshPicks,
+                shape = RoundedCornerShape(16.dp),
+                color = GeminiCardBg,
+                border = androidx.compose.foundation.BorderStroke(1.dp, GeminiBorder.copy(alpha = 0.6f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Refresh, 
+                        contentDescription = "Refresh Picks", 
+                        tint = GeminiBlue, 
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        "Refresh", 
+                        style = MaterialTheme.typography.labelSmall, 
+                        color = GeminiTextPrimary, 
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
         
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 24.dp),
-            pageSpacing = 16.dp
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            pageSpacing = 14.dp
         ) { page ->
             val track = tracks[page]
-            Card(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(180.dp)
-                    .clickable { onSongPlay(track, tracks) },
-                shape = RoundedCornerShape(20.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(GeminiCardBg)
+                    .border(1.dp, GeminiBorder.copy(alpha = 0.7f), RoundedCornerShape(24.dp))
+                    .clickable { onSongPlay(track, tracks) }
             ) {
-                Box {
-                    FuturisticThumbnail(model = track.thumbnailUrl, modifier = Modifier.fillMaxSize())
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
-                                    startY = 100f
-                                )
+                FuturisticThumbnail(model = track.thumbnailUrl, modifier = Modifier.fillMaxSize())
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
+                                startY = 80f
                             )
-                    )
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(20.dp)
+                        )
+                )
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(18.dp)
+                ) {
+                    Surface(
+                        color = GeminiBlue.copy(alpha = 0.2f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, GeminiBlue.copy(alpha = 0.4f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.padding(bottom = 8.dp)
                     ) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        ) {
-                            Text(
-                                "FEATURED", 
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Black
-                            )
-                        }
-                        Text(track.title, color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 1)
-                        Text(track.artist, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                        Text(
+                            "✨ $timeLabel", 
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = GeminiBlue,
+                            fontSize = 10.sp
+                        )
                     }
+                    Text(
+                        track.title, 
+                        color = Color.White, 
+                        style = MaterialTheme.typography.titleLarge, 
+                        fontWeight = FontWeight.Bold, 
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        track.artist, 
+                        color = Color.White.copy(alpha = 0.75f), 
+                        style = MaterialTheme.typography.bodyMedium, 
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
@@ -418,43 +526,48 @@ fun CuratedHeroSection(tracks: List<TrackEntity>, onSongPlay: (TrackEntity, List
 fun SongCard(track: TrackEntity, onClick: () -> Unit) {
     Column(
         modifier = Modifier
-            .width(140.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .width(148.dp)
+            .clip(RoundedCornerShape(18.dp))
             .clickable(
                 onClick = onClick,
                 interactionSource = remember { MutableInteractionSource() },
-                indication = rememberRipple(bounded = true)
+                indication = rememberRipple(bounded = true, color = GeminiBlue)
             )
             .padding(4.dp)
     ) {
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+        Box(
+            modifier = Modifier
+                .size(140.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(GeminiCardBg)
+                .border(1.dp, GeminiBorder.copy(alpha = 0.6f), RoundedCornerShape(18.dp))
         ) {
             FuturisticThumbnail(
                 model = track.thumbnailUrl, 
                 modifier = Modifier
-                    .size(132.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(18.dp))
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = track.title, 
-            color = MaterialTheme.colorScheme.onBackground, 
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = GeminiTextPrimary, 
+            style = MaterialTheme.typography.titleSmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp
+            ),
             maxLines = 1, 
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 4.dp)
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
         Text(
             text = track.artist, 
-            color = MaterialTheme.colorScheme.onSurfaceVariant, 
-            style = MaterialTheme.typography.labelSmall,
+            color = GeminiTextSecondary, 
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
             maxLines = 1, 
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 4.dp)
+            modifier = Modifier.padding(horizontal = 2.dp)
         )
     }
 }

@@ -237,7 +237,52 @@ class MusicService : MediaSessionService() {
             }
         }
 
-        mediaSession = MediaSession.Builder(this, exoPlayer)
+        val forwardingPlayer = object : androidx.media3.common.ForwardingPlayer(exoPlayer) {
+            override fun getAvailableCommands(): Player.Commands {
+                return super.getAvailableCommands().buildUpon()
+                    .add(Player.COMMAND_SEEK_TO_NEXT)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    .build()
+            }
+
+            override fun isCommandAvailable(command: Int): Boolean {
+                return if (command == Player.COMMAND_SEEK_TO_NEXT || command == Player.COMMAND_SEEK_TO_PREVIOUS) {
+                    true
+                } else {
+                    super.isCommandAvailable(command)
+                }
+            }
+
+            override fun hasNextMediaItem(): Boolean {
+                return true
+            }
+
+            override fun hasPreviousMediaItem(): Boolean {
+                return true
+            }
+
+            override fun seekToNext() {
+                if (super.hasNextMediaItem()) {
+                    super.seekToNext()
+                } else {
+                    val intent = Intent("com.ansh.ytmusicpreimum.ACTION_SKIP_NEXT")
+                    intent.setPackage(packageName)
+                    sendBroadcast(intent)
+                }
+            }
+
+            override fun seekToPrevious() {
+                if (super.hasPreviousMediaItem()) {
+                    super.seekToPrevious()
+                } else {
+                    val intent = Intent("com.ansh.ytmusicpreimum.ACTION_SKIP_PREV")
+                    intent.setPackage(packageName)
+                    sendBroadcast(intent)
+                }
+            }
+        }
+
+        mediaSession = MediaSession.Builder(this, forwardingPlayer)
             .setCallback(callback)
             .build()
     }

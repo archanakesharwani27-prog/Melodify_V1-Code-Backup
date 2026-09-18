@@ -89,16 +89,190 @@ object YouTubeExtractor {
                     } else {
                         item.url.substringAfterLast("/")
                     }
+                    val decodedName = decodeHtml(item.name)
+                    val decodedUploader = decodeHtml(item.uploaderName)
                     TrackEntity(
                         id = videoId,
-                        title = decodeHtml(item.name),
-                        artist = decodeHtml(item.uploaderName),
+                        title = cleanSongTitle(decodedName),
+                        artist = cleanArtistName(decodedName, decodedUploader),
                         thumbnailUrl = item.thumbnails.firstOrNull()?.url ?: ""
                     )
                 }
         } catch (e: Exception) {
             e.printStackTrace()
             emptyList()
+        }
+    }
+
+    suspend fun getRelatedTracks(videoId: String, artist: String = "", title: String = ""): List<TrackEntity> = withContext(Dispatchers.IO) {
+        try {
+            val service = ServiceList.YouTube
+            val url = "https://www.youtube.com/watch?v=$videoId"
+            val streamInfo = StreamInfo.getInfo(service, url)
+            val related = streamInfo.relatedItems
+                .filterIsInstance<StreamInfoItem>()
+                .map { item ->
+                    val id = if (item.url.contains("v=")) {
+                        item.url.substringAfter("v=").substringBefore("&")
+                    } else {
+                        item.url.substringAfterLast("/")
+                    }
+                    val decodedName = decodeHtml(item.name)
+                    val decodedUploader = decodeHtml(item.uploaderName)
+                    TrackEntity(
+                        id = id,
+                        title = cleanSongTitle(decodedName),
+                        artist = cleanArtistName(decodedName, decodedUploader),
+                        thumbnailUrl = item.thumbnails.firstOrNull()?.url ?: ""
+                    )
+                }
+                .filter { it.id != videoId }
+            val currentCore = extractCoreTitle(title).lowercase()
+            val filteredRelated = related.filter { item ->
+                val itemCore = extractCoreTitle(item.title).lowercase()
+                val isSameTitle = itemCore.isNotEmpty() && currentCore.isNotEmpty() && 
+                    (itemCore == currentCore || (itemCore.length > 3 && currentCore.length > 3 && (itemCore.contains(currentCore) || currentCore.contains(itemCore))))
+                !isSameTitle
+            }
+            if (filteredRelated.isNotEmpty()) {
+                return@withContext filteredRelated
+            } else if (related.isNotEmpty()) {
+                return@withContext related
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("YouTubeExtractor", "Failed to fetch related items via StreamInfo for $videoId", e)
+        }
+
+        val cleanTitle = extractCoreTitle(title)
+        val cleanArtist = artist.replace(" - Topic", "").trim()
+        val isLabelArtist = listOf("t-series", "sony", "tips", "zee", "speed", "saregama", "yrf", "universal", "music", "vevo")
+            .any { cleanArtist.lowercase().contains(it) }
+
+        val query = if (cleanArtist.isNotBlank() && !isLabelArtist) {
+            "$cleanArtist Top Hit Songs"
+        } else if (cleanTitle.isNotBlank()) {
+            "$cleanTitle Bollywood Radio"
+        } else {
+            "Trending Bollywood Hits"
+        }
+        val currentCore = cleanTitle.lowercase()
+        search(query).filter { item ->
+            val itemCore = extractCoreTitle(item.title).lowercase()
+            item.id != videoId && (currentCore.isEmpty() || !itemCore.contains(currentCore))
+        }
+    }
+
+    fun cleanSongTitle(rawTitle: String): String {
+        var title = rawTitle
+
+        // 1. Handle Colon split: "Akhiyaan Gulaab (Song): Shahid Kapoor, Kriti Sanon..."
+        if (title.contains(":")) {
+            val left = title.substringBefore(":").trim()
+            val lowerLeft = left.lowercase()
+            if (left.isNotBlank() && !lowerLeft.startsWith("full") && !lowerLeft.startsWith("official") && left.length > 2) {
+                title = left
+            }
+        }
+
+        // 2. Delimiters like |, •, /, ~
+        val segment = title.split("|", "•", "/", "~").firstOrNull() ?: title
+        title = segment
+
+        // 3. Remove dashes if it's "Title - Movie" or "Artist - Title"
+        if (title.contains(" - ") || title.contains(" – ")) {
+            val parts = title.split(Regex(" [–-] "))
+            if (parts.size >= 2) {
+                val p0 = parts[0].trim()
+                val p1 = parts[1].trim()
+                title = if (p0.length in 2..35) p0 else p1
+            }
+        }
+
+        // 4. Strip parenthetical junk like (Song), (Official Video), (Lyrical), (Full Song), [4K], etc.
+        title = title
+            .replace(Regex("(?i)\\((?:official\\s*(?:music\\s*)?video|lyric(?:al)?(?:\\s*video)?|full\\s*(?:video\\s*)?song|video\\s*song|audio|song|remix|hd|4k|from\\s*\"[^\"]+\"|from\\s*'[^']+')\\)"), "")
+            .replace(Regex("(?i)\\[(?:official\\s*(?:music\\s*)?video|lyric(?:al)?(?:\\s*video)?|full\\s*(?:video\\s*)?song|video\\s*song|audio|song|remix|hd|4k)\\]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
+        return if (title.isNotBlank()) title else rawTitle.trim()
+    }
+
+    fun cleanArtistName(rawTitle: String, rawUploader: String): String {
+        val uploader = rawUploader.replace(" - Topic", "", ignoreCase = true).trim()
+        val isLabel = listOf(
+            "t-series", "tseries", "sony music", "sony", "tips official", "tips", 
+            "zee music", "zeemusic", "speed records", "universal music", "saregama", 
+            "yrf", "white hill", "geet mp3", "desi music factory", "dm - desi music factory",
+            "aditya music", "lahari music", "svf", "vevo", "records", "music", "channel", "official"
+        ).any { uploader.lowercase().contains(it) }
+
+        if (!isLabel && uploader.isNotBlank()) {
+            return uploader
+        }
+
+        val knownSingers = listOf(
+            "Arijit Singh", "Mitraz", "Atif Aslam", "Shreya Ghoshal", "Jubin Nautiyal",
+            "Yo Yo Honey Singh", "Honey Singh", "B Praak", "Diljit Dosanjh", "Badshah",
+            "Sidhu Moose Wala", "Karan Aujla", "AP Dhillon", "Sunidhi Chauhan", "Sonu Nigam",
+            "Mohit Chauhan", "KK", "Kumar Sanu", "Udit Narayan", "Alka Yagnik", "Pritam",
+            "A.R. Rahman", "Anirudh", "Darshan Raval", "Armaan Malik", "Guru Randhawa",
+            "Hardy Sandhu", "Vishal Mishra", "Jasleen Royal", "Stebin Ben", "Sachin-Jigar",
+            "Amitabh Bhattacharya", "Neha Kakkar", "Lata Mangeshkar", "Kishore Kumar"
+        )
+        val matchedSinger = knownSingers.find { rawTitle.contains(it, ignoreCase = true) }
+        if (matchedSinger != null) {
+            return matchedSinger
+        }
+
+        val segments = rawTitle.split("|", "•").map { it.trim() }
+        for (seg in segments.drop(1)) {
+            val s = seg.replace(Regex("\\(.*?\\)"), "").trim()
+            if (s.isNotBlank() && s.length < 30 && !s.lowercase().contains("t-series") && !s.lowercase().contains("official") && !s.lowercase().contains("video")) {
+                if (s.split(" ").size in 1..3) {
+                    return s
+                }
+            }
+        }
+
+        return if (uploader.isNotBlank()) uploader else "Various Artists"
+    }
+
+    private fun extractCoreTitle(raw: String): String {
+        return cleanSongTitle(raw)
+    }
+
+    suspend fun getVideoUrl(videoId: String, quality: String = "720p"): String? = withContext(Dispatchers.IO) {
+        val cacheKey = "vid_${videoId}_$quality"
+        getCachedUrl(cacheKey, quality)?.let { return@withContext it }
+        
+        try {
+            val service = ServiceList.YouTube
+            val url = "https://www.youtube.com/watch?v=$videoId"
+            val streamInfo = StreamInfo.getInfo(service, url)
+            
+            // Look for muxed video streams first (contains synchronized audio & video)
+            val muxedStreams = streamInfo.videoStreams.filter { !it.isVideoOnly }
+            
+            val chosenStream = when (quality) {
+                "360p" -> muxedStreams.find { it.resolution?.contains("360") == true }
+                    ?: muxedStreams.minByOrNull { it.bitrate }
+                "720p" -> muxedStreams.find { it.resolution?.contains("720") == true }
+                    ?: muxedStreams.maxByOrNull { it.bitrate }
+                "1080p" -> muxedStreams.find { it.resolution?.contains("1080") == true }
+                    ?: muxedStreams.maxByOrNull { it.bitrate }
+                else -> muxedStreams.find { it.resolution?.contains("720") == true }
+                    ?: muxedStreams.firstOrNull()
+            } ?: streamInfo.videoStreams.firstOrNull()
+            
+            val videoUrl = chosenStream?.url
+            if (videoUrl != null) {
+                cacheUrl(cacheKey, videoUrl, quality)
+            }
+            return@withContext videoUrl
+        } catch (e: Exception) {
+            android.util.Log.e("YouTubeExtractor", "Failed to extract video url for $videoId", e)
+            null
         }
     }
 

@@ -115,6 +115,11 @@ fun MainScreen(
     val audioQuality by musicViewModel.audioQuality.collectAsState()
     val lyrics by musicViewModel.lyrics.collectAsState()
     val isFetchingLyrics by musicViewModel.isFetchingLyrics.collectAsState()
+    val isVideoMode by musicViewModel.isVideoMode.collectAsState()
+    val videoQuality by musicViewModel.videoQuality.collectAsState()
+    val relatedTracks by musicViewModel.relatedTracks.collectAsState()
+    val isLoadingRelated by musicViewModel.isLoadingRelated.collectAsState()
+    val playerController by musicViewModel.mediaControllerState.collectAsState()
     var isPlayerFull by remember { mutableStateOf(false) }
     var showMiniPlayer by remember { mutableStateOf(true) }
     
@@ -471,6 +476,16 @@ fun MainScreen(
                         lyrics = lyrics,
                         userTier = userTier,
                         downloadState = downloadStates[mediaItem.mediaId],
+                        isVideoMode = isVideoMode,
+                        onToggleVideoMode = { musicViewModel.setVideoMode(it) },
+                        videoQuality = videoQuality,
+                        onVideoQualityChange = { musicViewModel.setVideoQuality(it) },
+                        audioQuality = audioQuality,
+                        onAudioQualityChange = { musicViewModel.setAudioQuality(it) },
+                        relatedTracks = relatedTracks,
+                        isLoadingRelated = isLoadingRelated,
+                        onPlayRelatedTrack = { musicViewModel.playRelatedTrack(it) },
+                        playerController = playerController,
                         onDownloadClick = {
                             trackToDownload = TrackEntity(
                                 id = mediaItem.mediaId,

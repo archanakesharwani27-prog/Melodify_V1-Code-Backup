@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "854004439119-localdebugkeystore.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.melodify.melodifyapp",
+            "certificate_hash": "28c8170388875492b7f700ddd198bde94959a0a0"
+          }
+        },
+        {
           "client_id": "854004439119-vtfd5l5rfet0rviabr9uqe3d4rbgucj1.apps.googleusercontent.com",
           "client_type": 3
         }

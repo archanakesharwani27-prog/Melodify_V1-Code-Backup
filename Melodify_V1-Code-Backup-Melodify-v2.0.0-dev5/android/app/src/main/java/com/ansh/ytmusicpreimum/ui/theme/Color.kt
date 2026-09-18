@@ -10,11 +10,23 @@ val PrimaryPink = Color(0xFFE91E63)
 val AccentPurple = Color(0xFFBB86FC)
 val GrayText = Color(0xFFB3B3B3)
 
-// Futuristic Dark (Images 3 & 4)
-val CyberDarkBg = Color(0xFF0D0D12)
-val CyberSurface = Color(0xFF16161E)
+// Google Gemini Aesthetic Palette
+val GeminiBg = Color(0xFF131314)           // Clean deep dark Gemini canvas
+val GeminiCardBg = Color(0xFF1E1F20)       // Gemini elevated surface
+val GeminiCardHover = Color(0xFF282A2C)    // Gemini secondary elevated surface
+val GeminiBorder = Color(0xFF37393B)       // Gemini subtle structural border
+val GeminiBlue = Color(0xFF7AA9FF)         // Gemini AI Blue
+val GeminiPurple = Color(0xFFA78BFA)       // Gemini Sparkle Violet
+val GeminiPink = Color(0xFFF28B82)         // Gemini Coral Glow
+val GeminiTextPrimary = Color(0xFFE3E3E3)  // Clean white text
+val GeminiTextSecondary = Color(0xFF8E918F)// Soft muted gray text
+val GeminiSearchPill = Color(0xFF202124)   // Gemini search pill surface
+
+// Futuristic Dark
+val CyberDarkBg = Color(0xFF131314)
+val CyberSurface = Color(0xFF1E1F20)
 val NeonRed = Color(0xFFFF2D55)
-val CyberGray = Color(0xFF9EA0A3)
+val CyberGray = Color(0xFF8E918F)
 
 // Futuristic Light (Images 1 & 2)
 val GlassLightBg = Color(0xFFD4D9F5) // Soft Periwinkle/Lavender

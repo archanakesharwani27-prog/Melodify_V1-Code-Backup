@@ -3,6 +3,8 @@ package com.ansh.ytmusicpreimum.ui.screens.search
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,6 +12,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -109,7 +112,7 @@ fun SearchScreen(
                             onAddToPlaylist = { onAddToPlaylist(track) }
                         ) { 
                             searchViewModel.addToHistory(query)
-                            onSongPlay(track, results) 
+                            onSongPlay(track, listOf(track)) 
                         }
                     }
                 }
@@ -155,43 +158,54 @@ fun SearchErrorState(onRetry: () -> Unit) {
 fun SearchBar(query: String, onQueryChange: (String) -> Unit, onSearch: () -> Unit) {
     var isFocused by remember { mutableStateOf(false) }
     
-    TextField(
-        value = query, onValueChange = onQueryChange,
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .onFocusChanged { isFocused = it.isFocused }
-            .clip(RoundedCornerShape(28.dp)),
-        placeholder = { Text("Koi bhi gaana search karo...", color = GrayText) },
-        leadingIcon = { 
-            Icon(
-                Icons.Default.Search, 
-                contentDescription = null, 
-                tint = if (isFocused) MaterialTheme.colorScheme.primary else GrayText,
-                modifier = Modifier.graphicsLayer {
-                    scaleX = if (isFocused) 1.1f else 1.0f
-                    scaleY = if (isFocused) 1.1f else 1.0f
+            .clip(RoundedCornerShape(28.dp))
+            .background(GeminiCardBg)
+            .border(
+                width = 1.dp,
+                color = if (isFocused) GeminiBlue else GeminiBorder.copy(alpha = 0.8f),
+                shape = RoundedCornerShape(28.dp)
+            )
+    ) {
+        TextField(
+            value = query, 
+            onValueChange = onQueryChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { isFocused = it.isFocused },
+            placeholder = { Text("Search songs, artists, or moods...", color = GeminiTextSecondary, fontSize = 14.sp) },
+            leadingIcon = { 
+                Icon(
+                    Icons.Default.Search, 
+                    contentDescription = null, 
+                    tint = if (isFocused) GeminiBlue else GeminiTextSecondary,
+                    modifier = Modifier.size(22.dp)
+                ) 
+            },
+            trailingIcon = {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { onQueryChange("") }) {
+                        Icon(Icons.Default.Close, contentDescription = "Clear", tint = GeminiTextSecondary, modifier = Modifier.size(18.dp))
+                    }
                 }
-            ) 
-        },
-        trailingIcon = {
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
-                    Icon(Icons.Default.Close, contentDescription = "Clear", tint = GrayText)
-                }
-            }
-        },
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            cursorColor = MaterialTheme.colorScheme.primary
-        ),
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { onSearch() })
-    )
+            },
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                cursorColor = GeminiBlue,
+                focusedTextColor = GeminiTextPrimary,
+                unfocusedTextColor = GeminiTextPrimary
+            ),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearch() })
+        )
+    }
 }
 
 @Composable
@@ -218,15 +232,36 @@ fun GenreGrid(onGenreClick: (String) -> Unit) {
 
 @Composable
 fun GenreCard(name: String, color: Color, onClick: () -> Unit) {
-    Surface(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(90.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick), 
-        color = color
+            .height(84.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(GeminiCardBg)
+            .border(1.dp, GeminiBorder.copy(alpha = 0.8f), RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(14.dp)
     ) {
-        Box(modifier = Modifier.padding(12.dp)) { Text(name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp) }
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(color)
+                .align(Alignment.TopEnd)
+        )
+        Column(modifier = Modifier.align(Alignment.BottomStart)) {
+            Text(
+                name, 
+                color = GeminiTextPrimary, 
+                fontWeight = FontWeight.SemiBold, 
+                fontSize = 15.sp
+            )
+            Text(
+                "Explore Mix", 
+                color = GeminiTextSecondary, 
+                fontSize = 11.sp
+            )
+        }
     }
 }
 
@@ -235,25 +270,30 @@ fun RecentSearches(recent: List<String>, onItemClick: (String) -> Unit, onDelete
     if (recent.isEmpty()) return
     Column(modifier = Modifier.padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.History, contentDescription = null, tint = GrayText, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.History, contentDescription = null, tint = GeminiTextSecondary, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Recent Searches", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("Recent Searches", color = GeminiTextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             Spacer(modifier = Modifier.weight(1f))
-            Text("Clear all", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, modifier = Modifier.clickable(onClick = onClearAll))
+            Text("Clear all", color = GeminiBlue, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.clickable(onClick = onClearAll))
         }
+        Spacer(modifier = Modifier.height(10.dp))
         recent.forEach { item ->
             Row(
                 verticalAlignment = Alignment.CenterVertically, 
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
                     .clickable { onItemClick(item) }
-                    .padding(vertical = 8.dp)
+                    .padding(vertical = 10.dp, horizontal = 4.dp)
             ) {
-                 Icon(Icons.Default.History, contentDescription = null, tint = GrayText, modifier = Modifier.size(18.dp))
-                 Spacer(modifier = Modifier.width(16.dp))
-                 Text(item, color = GrayText, modifier = Modifier.weight(1f))
-                 IconButton(onClick = { onDelete(item) }) { Icon(Icons.Default.Close, contentDescription = null, tint = GrayText, modifier = Modifier.size(16.dp)) }
+                Icon(Icons.Default.History, contentDescription = null, tint = GeminiTextSecondary.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(item, color = GeminiTextPrimary, modifier = Modifier.weight(1f), fontSize = 14.sp)
+                IconButton(onClick = { onDelete(item) }, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "Delete", tint = GeminiTextSecondary.copy(alpha = 0.6f), modifier = Modifier.size(14.dp))
+                }
             }
         }
     }
 }
+

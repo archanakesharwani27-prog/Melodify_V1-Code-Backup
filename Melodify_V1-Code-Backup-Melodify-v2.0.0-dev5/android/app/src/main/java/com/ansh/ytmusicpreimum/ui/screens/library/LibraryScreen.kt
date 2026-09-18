@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.ansh.ytmusicpreimum.DownloadState
@@ -37,8 +38,7 @@ import com.ansh.ytmusicpreimum.ui.LibraryViewModel
 import com.ansh.ytmusicpreimum.ui.MusicViewModel
 import com.ansh.ytmusicpreimum.ui.components.LibraryEmptyState
 import com.ansh.ytmusicpreimum.ui.components.TrackItem
-import com.ansh.ytmusicpreimum.ui.theme.CyberSurface
-import com.ansh.ytmusicpreimum.ui.theme.GrayText
+import com.ansh.ytmusicpreimum.ui.theme.*
 
 @Composable
 fun PlaylistCard(
@@ -48,10 +48,11 @@ fun PlaylistCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f),
-        shape = RoundedCornerShape(12.dp)
+        color = com.ansh.ytmusicpreimum.ui.theme.GeminiCardBg,
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, com.ansh.ytmusicpreimum.ui.theme.GeminiBorder.copy(alpha = 0.8f))
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -62,49 +63,50 @@ fun PlaylistCard(
                     model = playlist.coverUrl,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(8.dp)),
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(12.dp)),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
+                        .size(54.dp)
                         .background(
-                            MaterialTheme.colorScheme.primaryContainer,
-                            RoundedCornerShape(8.dp)
+                            com.ansh.ytmusicpreimum.ui.theme.GeminiCardHover,
+                            RoundedCornerShape(12.dp)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.QueueMusic,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
+                        tint = com.ansh.ytmusicpreimum.ui.theme.GeminiBlue
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = playlist.name,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    color = com.ansh.ytmusicpreimum.ui.theme.GeminiTextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = playlist.description ?: "Playlist",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = GrayText,
+                    text = playlist.description ?: "Custom Playlist",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = com.ansh.ytmusicpreimum.ui.theme.GeminiTextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                tint = GrayText
+                tint = com.ansh.ytmusicpreimum.ui.theme.GeminiTextSecondary.copy(alpha = 0.6f)
             )
         }
     }
@@ -113,26 +115,21 @@ fun PlaylistCard(
 @Composable
 fun LibraryChip(
     label: String,
-    count: Int? = null,
     isSelected: Boolean,
+    count: Int? = null,
     onClick: () -> Unit
 ) {
-    val backgroundColor by animateColorAsState(
-        if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
-        label = "chipBackground"
-    )
-    val contentColor by animateColorAsState(
-        if (isSelected) Color.White else GrayText,
-        label = "chipContent"
-    )
+    val backgroundColor = if (isSelected) com.ansh.ytmusicpreimum.ui.theme.GeminiBlue.copy(alpha = 0.18f) else com.ansh.ytmusicpreimum.ui.theme.GeminiCardBg
+    val contentColor = if (isSelected) com.ansh.ytmusicpreimum.ui.theme.GeminiBlue else com.ansh.ytmusicpreimum.ui.theme.GeminiTextSecondary
+    val borderColor = if (isSelected) com.ansh.ytmusicpreimum.ui.theme.GeminiBlue.copy(alpha = 0.5f) else com.ansh.ytmusicpreimum.ui.theme.GeminiBorder.copy(alpha = 0.8f)
 
     Surface(
         color = backgroundColor,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(20.dp),
         modifier = Modifier
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(20.dp))
             .clickable(onClick = onClick),
-        border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),

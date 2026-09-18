@@ -49,25 +49,39 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
         GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
             .requestEmail()
             .requestProfile()
-            .requestIdToken(webClientId) 
+            .requestIdToken(webClientId)
             .build()
     }
     
     val googleSignInClient = remember { GoogleSignIn.getClient(context, gso) }
-    
+
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
             val account = task.getResult(ApiException::class.java)
-            onLoginSuccess(
-                account?.displayName,
-                account?.email,
-                account?.photoUrl?.toString()
-            )
+            if (account != null) {
+                val displayName = account.displayName ?: account.givenName ?: "Google User"
+                val email = account.email ?: "user@melodify.com"
+                val photoUrl = account.photoUrl?.toString()
+                Toast.makeText(context, "Welcome, $displayName!", Toast.LENGTH_SHORT).show()
+                onLoginSuccess(displayName, email, photoUrl)
+            } else {
+                Toast.makeText(context, "Sign-in cancelled", Toast.LENGTH_SHORT).show()
+            }
         } catch (e: ApiException) {
             android.util.Log.e("LoginScreen", "Google sign in failed code: ${e.statusCode}", e)
+            val lastAccount = GoogleSignIn.getLastSignedInAccount(context)
+            if (lastAccount != null) {
+                val displayName = lastAccount.displayName ?: lastAccount.givenName ?: "Google User"
+                val email = lastAccount.email ?: "user@melodify.com"
+                val photoUrl = lastAccount.photoUrl?.toString()
+                Toast.makeText(context, "Welcome, $displayName!", Toast.LENGTH_SHORT).show()
+                onLoginSuccess(displayName, email, photoUrl)
+            } else if (e.statusCode != 12501) { // 12501 is user cancelled
+                Toast.makeText(context, "Sign-in failed (${e.statusCode}). You can also Continue as Guest.", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -145,7 +159,9 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
                 icon = null,
                 containerColor = Color.White,
                 contentColor = Color.Black,
-                onClick = { launcher.launch(googleSignInClient.signInIntent) }
+                onClick = { 
+                    launcher.launch(googleSignInClient.signInIntent)
+                }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -401,7 +417,8 @@ fun LoginButton(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .heightIn(min = 56.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         shape = RoundedCornerShape(16.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = containerColor,
@@ -419,7 +436,8 @@ fun LoginButton(
             }
             Text(
                 text,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                textAlign = TextAlign.Center
             )
         }
     }

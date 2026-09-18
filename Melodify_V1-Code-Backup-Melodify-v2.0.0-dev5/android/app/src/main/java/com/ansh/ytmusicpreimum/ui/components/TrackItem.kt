@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.ansh.ytmusicpreimum.DownloadState
 import com.ansh.ytmusicpreimum.DownloadStatus
 import com.ansh.ytmusicpreimum.data.TrackEntity
-import com.ansh.ytmusicpreimum.ui.theme.GrayText
+import com.ansh.ytmusicpreimum.ui.theme.*
 
 @Composable
 fun TrackItem(
@@ -60,60 +60,63 @@ fun TrackItem(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer(scaleX = scale, scaleY = scale)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .clickable(
                 interactionSource = interactionSource,
-                indication = rememberRipple(bounded = true, color = MaterialTheme.colorScheme.primary),
+                indication = rememberRipple(bounded = true, color = GeminiBlue),
                 onClick = {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onClick()
                 }
             ),
-        color = if (isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(12.dp),
-        shadowElevation = elevation
+        color = if (isCurrent) GeminiCardBg else Color.Transparent,
+        shape = RoundedCornerShape(16.dp),
+        border = if (isCurrent) androidx.compose.foundation.BorderStroke(1.dp, GeminiBlue.copy(alpha = 0.35f)) else null
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(contentAlignment = Alignment.Center) {
                 FuturisticThumbnail(
                     model = track.thumbnailUrl,
                     modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(14.dp))
                 )
                 if (isCurrent) {
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
-                            .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(8.dp)),
+                            .size(52.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = null,
-                            tint = Color.White
+                            tint = GeminiBlue,
+                            modifier = Modifier.size(26.dp)
                         )
                     }
                 }
             }
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = track.title,
                     style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
+                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                        fontSize = 15.sp
                     ),
-                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    color = if (isCurrent) GeminiBlue else GeminiTextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = track.artist,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = GrayText,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = GeminiTextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

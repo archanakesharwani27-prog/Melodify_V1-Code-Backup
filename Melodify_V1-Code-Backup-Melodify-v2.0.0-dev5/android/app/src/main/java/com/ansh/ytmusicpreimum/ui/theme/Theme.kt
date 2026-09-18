@@ -13,18 +13,18 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
-    primary = NeonRed,
-    secondary = AccentPurple,
-    tertiary = NeonBlue,
-    background = CyberDarkBg,
-    surface = CyberSurface,
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color.White,
-    onSurface = Color.White,
-    onSurfaceVariant = Color(0xFFC4C6D0), // Subtitle/Secondary text color for dark mode
-    surfaceVariant = SurfaceGrey
+    primary = GeminiBlue,
+    secondary = GeminiPurple,
+    tertiary = GeminiPink,
+    background = GeminiBg,
+    surface = GeminiCardBg,
+    onPrimary = Color(0xFF00325B),
+    onSecondary = Color(0xFF381E72),
+    onTertiary = Color(0xFF492532),
+    onBackground = GeminiTextPrimary,
+    onSurface = GeminiTextPrimary,
+    onSurfaceVariant = GeminiTextSecondary,
+    surfaceVariant = GeminiCardHover
 )
 
 private val LightColorScheme = lightColorScheme(

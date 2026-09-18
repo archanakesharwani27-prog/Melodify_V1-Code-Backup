@@ -74,3 +74,20 @@ Melodify is an Android music streaming and local player application built using 
   - Annotated core Room and domain models (`TrackEntity`, `PlaylistEntity`, `HistoryEntity`, etc.) with `@Immutable` so the Jetpack Compose compiler can skip list row recompositions during fast scrolling.
 - **Network-Aware Download Queue**:
   - Integrated `ConnectivityManager.NetworkCallback` in `MelodifyDownloadManager.kt` to automatically pause downloads when off-network and resume processing seamlessly as soon as preferred network connectivity (e.g. Wi-Fi) is restored.
+
+### Phase 6: Google Gemini "Clean & Vyavasthit" UI Makeover (Completed)
+- **APK Packaging & Signing Compatibility (Fix for 'Invalid Package' error)**:
+  - Enabled both **v1 (JAR signing)** and **v2 (Full APK signature scheme)** in `build.gradle.kts`. When APKs are shared via WhatsApp, Telegram, or custom file managers, missing v1 signing causes Android package installer to fail with *"Invalid package" / "Problem parsing the package"*.
+  - Bumped `versionCode` to `6` and `versionName` to `"2.0.0-dev5"` to prevent signature and version downgrade conflicts with existing app installs.
+- **Gemini Color Palette & Surface Elevation System**:
+  - Replaced harsh neon red/magenta accents with Google Gemini's signature AI palette: `GeminiBg` (`#131314`), elevated `GeminiCardBg` (`#1E1F20`), `GeminiCardHover` (`#282A2C`), subtle structural border `GeminiBorder` (`#37393B`), `GeminiBlue` (`#7AA9FF`), and `GeminiPurple` (`#A78BFA`).
+- **Floating Pill Navigation Bar**:
+  - Redesigned `BottomNavigationBar.kt` into a suspended floating pill bar (`RoundedCornerShape(32.dp)`) with a frosted dark glass background, subtle outer border, and smooth pill-shaped active tab selection indicators.
+- **Gemini-Style Floating Mini Player**:
+  - Rebuilt `MiniPlayer.kt` into a clean floating card with `RoundedCornerShape(24.dp)`, subtle 1.dp structural border, circular action buttons, and a clean linear progress indicator.
+- **Home & Search Decluttering**:
+  - Transformed `HomeHeader` with Gemini sparkle AI badge, greeting, and search prompt pill.
+  - Refactored `GenreRow` chips into elegant Gemini prompt suggestion pills with smooth borders.
+  - Upgraded `SongCard` with `RoundedCornerShape(18.dp)`, subtle border, and clean typography.
+  - Replaced `SearchBar` with Gemini-styled prompt bar featuring focus borders and clean iconography.
+  - Updated `TrackItem` list rows with spacious rounded shapes and subtle active track borders.
