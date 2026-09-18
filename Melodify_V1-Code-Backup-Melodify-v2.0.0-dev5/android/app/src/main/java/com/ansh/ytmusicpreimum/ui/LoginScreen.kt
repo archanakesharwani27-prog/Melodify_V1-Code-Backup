@@ -65,6 +65,23 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
                 val displayName = account.displayName ?: account.givenName ?: "Google User"
                 val email = account.email ?: "user@melodify.com"
                 val photoUrl = account.photoUrl?.toString()
+
+                // Authenticate with Firebase for Gmail cloud sync
+                account.idToken?.let { token ->
+                    try {
+                        val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(token, null)
+                        com.google.firebase.auth.FirebaseAuth.getInstance().signInWithCredential(credential)
+                            .addOnSuccessListener { authResult ->
+                                authResult.user?.uid?.let { uid ->
+                                    com.ansh.ytmusicpreimum.data.TrackRepository.currentSyncUserId = uid
+                                }
+                            }
+                    } catch (e: Exception) {
+                        android.util.Log.e("LoginScreen", "Firebase credential sign-in error", e)
+                    }
+                }
+                com.ansh.ytmusicpreimum.data.TrackRepository.currentSyncUserId = email.replace(".", "_")
+
                 Toast.makeText(context, "Welcome, $displayName!", Toast.LENGTH_SHORT).show()
                 onLoginSuccess(displayName, email, photoUrl)
             } else {

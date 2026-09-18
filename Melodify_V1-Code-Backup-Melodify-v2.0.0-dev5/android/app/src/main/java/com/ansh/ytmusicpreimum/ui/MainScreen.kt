@@ -214,41 +214,110 @@ fun MainScreen(
 
     if (trackToDownload != null) {
         var downloadUsingCellular by remember { mutableStateOf(downloadNetworkType != 0) }
+        var isVideoDownload by remember { mutableStateOf(false) }
+
         AlertDialog(
             onDismissRequest = { trackToDownload = null },
-            containerColor = Color(0xFF121212),
+            containerColor = Color(0xFF1E1E28),
             title = { 
                 Box(modifier = Modifier.fillMaxWidth()) {
                     IconButton(onClick = { trackToDownload = null }, modifier = Modifier.align(Alignment.CenterStart)) {
                         Icon(Icons.Default.Close, contentDescription = null, tint = Color.White)
                     }
-                    Text("Music Quality", color = Color.White, modifier = Modifier.align(Alignment.Center), fontWeight = FontWeight.Bold)
+                    Text("Download Media", color = Color.White, modifier = Modifier.align(Alignment.Center), fontWeight = FontWeight.Bold)
                 }
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                    Text("Download", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    
-                    QualityOptionRow("Normal (Recommended)", "Low", currentQuality = audioQuality) {
-                        if (loginViewModel.useDownload()) {
-                            musicViewModel.downloadTrack(trackToDownload!!, "Low", userTier, if(downloadUsingCellular) 1 else 0)
-                            showDownloadFlyAnimation = trackToDownload
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Audio vs Video Mode Switcher Pill
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color.White.copy(alpha = 0.08f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(modifier = Modifier.padding(3.dp)) {
+                            Surface(
+                                onClick = { isVideoDownload = false },
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (!isVideoDownload) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Audio (MP3)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                            }
+                            Surface(
+                                onClick = { isVideoDownload = true },
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isVideoDownload) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.Videocam, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Video (MP4)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+                            }
                         }
-                        trackToDownload = null
                     }
-                    QualityOptionRow("High", "Medium", currentQuality = audioQuality) {
-                        if (loginViewModel.useDownload()) {
-                            musicViewModel.downloadTrack(trackToDownload!!, "Medium", userTier, if(downloadUsingCellular) 1 else 0)
-                            showDownloadFlyAnimation = trackToDownload
+
+                    if (!isVideoDownload) {
+                        Text("Select Audio Quality", color = Color.White.copy(alpha = 0.8f), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        QualityOptionRow("Normal (128 kbps)", "Low", currentQuality = audioQuality) {
+                            if (loginViewModel.useDownload()) {
+                                musicViewModel.downloadTrack(trackToDownload!!, "Low", userTier, if(downloadUsingCellular) 1 else 0)
+                                showDownloadFlyAnimation = trackToDownload
+                            }
+                            trackToDownload = null
                         }
-                        trackToDownload = null
-                    }
-                    QualityOptionRow("Very high", "High", currentQuality = audioQuality) {
-                        if (loginViewModel.useDownload()) {
-                            musicViewModel.downloadTrack(trackToDownload!!, "High", userTier, if(downloadUsingCellular) 1 else 0)
-                            showDownloadFlyAnimation = trackToDownload
+                        QualityOptionRow("High (256 kbps)", "Medium", currentQuality = audioQuality) {
+                            if (loginViewModel.useDownload()) {
+                                musicViewModel.downloadTrack(trackToDownload!!, "Medium", userTier, if(downloadUsingCellular) 1 else 0)
+                                showDownloadFlyAnimation = trackToDownload
+                            }
+                            trackToDownload = null
                         }
-                        trackToDownload = null
+                        QualityOptionRow("Very High (320 kbps)", "High", currentQuality = audioQuality) {
+                            if (loginViewModel.useDownload()) {
+                                musicViewModel.downloadTrack(trackToDownload!!, "High", userTier, if(downloadUsingCellular) 1 else 0)
+                                showDownloadFlyAnimation = trackToDownload
+                            }
+                            trackToDownload = null
+                        }
+                    } else {
+                        Text("Select Video Quality", color = Color.White.copy(alpha = 0.8f), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        QualityOptionRow("Standard (360p)", "360p", currentQuality = videoQuality) {
+                            if (loginViewModel.useDownload()) {
+                                musicViewModel.downloadVideoTrack(trackToDownload!!, "360p", userTier, if(downloadUsingCellular) 1 else 0)
+                                showDownloadFlyAnimation = trackToDownload
+                            }
+                            trackToDownload = null
+                        }
+                        QualityOptionRow("High Definition (720p)", "720p", currentQuality = videoQuality) {
+                            if (loginViewModel.useDownload()) {
+                                musicViewModel.downloadVideoTrack(trackToDownload!!, "720p", userTier, if(downloadUsingCellular) 1 else 0)
+                                showDownloadFlyAnimation = trackToDownload
+                            }
+                            trackToDownload = null
+                        }
+                        QualityOptionRow("Full HD (1080p)", "1080p", currentQuality = videoQuality) {
+                            if (loginViewModel.useDownload()) {
+                                musicViewModel.downloadVideoTrack(trackToDownload!!, "1080p", userTier, if(downloadUsingCellular) 1 else 0)
+                                showDownloadFlyAnimation = trackToDownload
+                            }
+                            trackToDownload = null
+                        }
                     }
 
                     HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
@@ -263,13 +332,14 @@ fun MainScreen(
                                 downloadUsingCellular = it
                                 loginViewModel.updateDownloadNetwork(if(it) 1 else 0)
                             },
-                            colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF1DB954), checkedTrackColor = Color(0xFF1DB954).copy(alpha = 0.5f))
+                            colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary, checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
                         )
                     }
                     Text(
-                        "Please keep Melodify open and your screen unlocked. Downloads will pause if your device is idle for more than two minutes.",
-                        color = Color.Gray,
-                        fontSize = 12.sp
+                        "Downloads are saved securely inside the app and will not clutter your photo gallery. Removed upon app uninstall.",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
                     )
                 }
             },

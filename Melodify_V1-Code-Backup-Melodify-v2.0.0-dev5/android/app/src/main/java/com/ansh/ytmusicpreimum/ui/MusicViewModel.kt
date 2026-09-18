@@ -18,6 +18,7 @@ import com.ansh.ytmusicpreimum.LyricsManager
 import com.ansh.ytmusicpreimum.LyricsState
 import com.ansh.ytmusicpreimum.MelodifyDownloadManager
 import com.ansh.ytmusicpreimum.MelodifyQueueManager
+import com.ansh.ytmusicpreimum.AudioEffectsManager
 import com.ansh.ytmusicpreimum.data.AppDatabase
 import com.ansh.ytmusicpreimum.data.TrackEntity
 import androidx.media3.session.SessionCommand
@@ -604,6 +605,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _currentMediaItem.value = loadingMediaItem
         _isPlaying.value = true
         _isBuffering.value = true
+        _duration.value = 0L
+        _currentPosition.value = 0L
         _lyrics.value = LyricsState()
         _playbackError.value = null
         isHistoryRecorded = false
@@ -908,6 +911,29 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 _playbackError.value = "Download error: ${e.message}"
             }
         }
+    }
+
+    fun downloadVideoTrack(track: TrackEntity, quality: String = "720p", userTier: Int = 0, networkType: Int = 0) {
+        viewModelScope.launch {
+            try {
+                val url = withContext(Dispatchers.IO) {
+                    YouTubeExtractor.getVideoUrl(track.id, quality)
+                }
+                if (url != null) {
+                    downloadManager.downloadVideo(track, url, quality, userTier, networkType)
+                } else {
+                    _playbackError.value = "Failed to get video download URL"
+                }
+            } catch (e: Exception) {
+                _playbackError.value = "Video download error: ${e.message}"
+            }
+        }
+    }
+
+    val currentAudioPreset: StateFlow<String> = AudioEffectsManager.currentPreset
+
+    fun setAudioPreset(presetName: String) {
+        AudioEffectsManager.applyPreset(presetName)
     }
 
     fun cancelDownload(songId: String) {

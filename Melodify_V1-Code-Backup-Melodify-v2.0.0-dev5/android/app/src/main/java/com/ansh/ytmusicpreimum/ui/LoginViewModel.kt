@@ -73,6 +73,10 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         checkAndResetLimits()
+        val email = _userEmail.value
+        if (!email.isNullOrBlank() && email != "guest@melodify.com") {
+            com.ansh.ytmusicpreimum.data.TrackRepository.currentSyncUserId = email.replace(".", "_")
+        }
     }
 
     private fun checkAndResetLimits() {
@@ -152,6 +156,9 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         _userName.value = name
         _userEmail.value = email
         _userPhotoUrl.value = photoUrl
+        if (!email.isNullOrBlank() && email != "guest@melodify.com") {
+            com.ansh.ytmusicpreimum.data.TrackRepository.currentSyncUserId = email.replace(".", "_")
+        }
     }
 
     private fun saveUserToPrefs(name: String?, email: String?, photoUrl: String?) {
@@ -168,6 +175,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             try { 
                 auth.signOut() 
+                com.ansh.ytmusicpreimum.data.TrackRepository.currentSyncUserId = null
                 context?.let {
                     val gso = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN).build()
                     com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(it, gso).signOut()

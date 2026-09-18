@@ -68,7 +68,8 @@ object LyricsManager {
                             false
                         }
 
-                        if (!durationMismatch) {
+                        val hasForeignMarkers = entity.lyrics.contains(Regex("(?i)\\b(você|não|comigo|dança|porra|baile)\\b"))
+                        if (!durationMismatch && !hasForeignMarkers) {
                             memoryCache.put(videoId, state)
                             return@withContext state
                         }
@@ -81,8 +82,9 @@ object LyricsManager {
 
         // 3. Network Fetch with Multi-Strategy Query Generation
         try {
+            val isRemix = title.contains(Regex("(?i)(remix|\\bdj\\b|mashup|club\\s*mix|dance\\s*mix|slowed|reverb)"))
             val candidates = generateQueryCandidates(title, artist)
-            android.util.Log.d("LyricsManager", "Query candidates for '$title': $candidates, dur=$durationSeconds")
+            android.util.Log.d("LyricsManager", "Query candidates for '$title' (remix=$isRemix): $candidates, dur=$durationSeconds")
 
             var bestLyrics: Pair<String, Boolean>? = null
             var bestScore = 0
@@ -102,16 +104,34 @@ object LyricsManager {
                                 val body = response.body?.string() ?: ""
                                 if (body.isNotBlank()) {
                                     val json = JSONObject(body)
+                                    val candidateTrack = json.optString("trackName", "")
+                                    val candidateArtist = json.optString("artistName", "")
                                     val candidateDur = json.optDouble("duration", 0.0)
                                     val synced = json.optString("syncedLyrics", "").takeIf { it.isNotBlank() }
                                     val plain = json.optString("plainLyrics", "").takeIf { it.isNotBlank() }
                                     
                                     val candidateText = synced ?: plain
                                     if (candidateText != null) {
-                                        val isSynced = synced != null
-                                        val score = scoreLyrics(candidateText, isSynced, candidateDur, durationSeconds)
+                                        val canBeSynced = synced != null && (!isRemix || (durationSeconds > 0 && kotlin.math.abs(candidateDur - durationSeconds) <= 4.0))
+                                        val textToUse = if (!canBeSynced && synced != null) {
+                                            synced.replace(Regex("\\[\\d+:\\d+\\.?\\d*\\]"), "").trim()
+                                        } else {
+                                            candidateText
+                                        }
+                                        
+                                        val score = scoreCandidate(
+                                            text = textToUse,
+                                            isSynced = canBeSynced,
+                                            candidateDuration = candidateDur,
+                                            targetDurationSeconds = durationSeconds,
+                                            queryTrack = queryTrack,
+                                            candidateTrack = candidateTrack,
+                                            queryArtist = queryArtist.ifBlank { artist },
+                                            candidateArtist = candidateArtist,
+                                            isRemix = isRemix
+                                        )
                                         if (score > bestScore) {
-                                            bestLyrics = Pair(candidateText, isSynced)
+                                            bestLyrics = Pair(textToUse, canBeSynced)
                                             bestScore = score
                                         }
                                     }
@@ -123,7 +143,7 @@ object LyricsManager {
                     }
                 }
 
-                if (bestScore >= 155) break // Perfect duration match + Latin Synced lyrics!
+                if (bestScore >= 160) break // Perfect match found
 
                 // B. LRCLIB Search API
                 if (querySearch.isNotBlank()) {
@@ -140,23 +160,37 @@ object LyricsManager {
                                     val jsonArray = org.json.JSONArray(body)
                                     for (i in 0 until jsonArray.length().coerceAtMost(16)) {
                                         val item = jsonArray.getJSONObject(i)
+                                        val candidateTrack = item.optString("trackName", "")
+                                        val candidateArtist = item.optString("artistName", "")
                                         val candidateDur = item.optDouble("duration", 0.0)
                                         val synced = item.optString("syncedLyrics", "").takeIf { it.isNotBlank() }
                                         val plain = item.optString("plainLyrics", "").takeIf { it.isNotBlank() }
                                         
-                                        if (synced != null) {
-                                            val score = scoreLyrics(synced, true, candidateDur, durationSeconds)
+                                        val candidateText = synced ?: plain
+                                        if (candidateText != null) {
+                                            val canBeSynced = synced != null && (!isRemix || (durationSeconds > 0 && kotlin.math.abs(candidateDur - durationSeconds) <= 4.0))
+                                            val textToUse = if (!canBeSynced && synced != null) {
+                                                synced.replace(Regex("\\[\\d+:\\d+\\.?\\d*\\]"), "").trim()
+                                            } else {
+                                                candidateText
+                                            }
+
+                                            val score = scoreCandidate(
+                                                text = textToUse,
+                                                isSynced = canBeSynced,
+                                                candidateDuration = candidateDur,
+                                                targetDurationSeconds = durationSeconds,
+                                                queryTrack = queryTrack,
+                                                candidateTrack = candidateTrack,
+                                                queryArtist = queryArtist.ifBlank { artist },
+                                                candidateArtist = candidateArtist,
+                                                isRemix = isRemix
+                                            )
                                             if (score > bestScore) {
-                                                bestLyrics = Pair(synced, true)
+                                                bestLyrics = Pair(textToUse, canBeSynced)
                                                 bestScore = score
                                             }
-                                            if (bestScore >= 155) break
-                                        } else if (plain != null) {
-                                            val score = scoreLyrics(plain, false, candidateDur, durationSeconds)
-                                            if (score > bestScore) {
-                                                bestLyrics = Pair(plain, false)
-                                                bestScore = score
-                                            }
+                                            if (bestScore >= 160) break
                                         }
                                     }
                                 }
@@ -167,11 +201,11 @@ object LyricsManager {
                     }
                 }
 
-                if (bestScore >= 155) break
+                if (bestScore >= 160) break
             }
 
             val selectedLyrics = bestLyrics
-            if (selectedLyrics != null) {
+            if (selectedLyrics != null && bestScore > 40) {
                 val (lyricsToStore, isSynced) = selectedLyrics
                 val expiry = System.currentTimeMillis() + (7 * 24 * 60 * 60 * 1000) // 7 days
                 try {
@@ -219,26 +253,126 @@ object LyricsManager {
         }
     }
 
-    private fun scoreLyrics(text: String, isSynced: Boolean, candidateDuration: Double = 0.0, targetDurationSeconds: Int = 0): Int {
+    private fun scoreCandidate(
+        text: String,
+        isSynced: Boolean,
+        candidateDuration: Double,
+        targetDurationSeconds: Int,
+        queryTrack: String,
+        candidateTrack: String,
+        queryArtist: String,
+        candidateArtist: String,
+        isRemix: Boolean
+    ): Int {
+        // 1. Strict Title Validation: Disqualify candidate if titles do not meaningfully match
+        if (!hasTitleMatch(queryTrack, candidateTrack, queryArtist, candidateArtist)) {
+            return -1000
+        }
+
+        // 2. Reject foreign scripts (e.g. Urdu, Arabic, Gurmukhi if Latin/Devanagari was requested)
         val script = detectScript(text)
+        if (script == LyricsScript.REGIONAL_OTHER) {
+            return -500
+        }
+
         var score = when (script) {
             LyricsScript.LATIN -> if (isSynced) 100 else 60
             LyricsScript.DEVANAGARI -> if (isSynced) 75 else 45
-            LyricsScript.REGIONAL_OTHER -> if (isSynced) 20 else 10
+            LyricsScript.REGIONAL_OTHER -> 0
         }
 
-        // Apply duration proximity scoring
+        // 3. Artist Matching Bonus
+        if (queryArtist.isNotBlank() && candidateArtist.isNotBlank()) {
+            val qA = queryArtist.lowercase().trim()
+            val cA = candidateArtist.lowercase().trim()
+            if (qA in cA || cA in qA) {
+                score += 30
+            }
+        }
+
+        // 4. Duration Proximity Scoring
         if (targetDurationSeconds > 0 && candidateDuration > 0) {
             val diff = kotlin.math.abs(candidateDuration - targetDurationSeconds)
             when {
-                diff <= 2.5 -> score += 60 // Spot on match!
-                diff <= 5.0 -> score += 40 // Very close!
-                diff <= 10.0 -> score += 15
-                diff <= 20.0 -> score -= 15
-                else -> score -= 60 // Severe mismatch (wrong version, remix, teaser)
+                diff <= 2.0 -> score += 60 // Spot on match
+                diff <= 5.0 -> score += 35
+                diff <= 10.0 -> score += 10
+                diff <= 20.0 -> score -= 25
+                else -> {
+                    // Severe duration difference (>20s)
+                    if (isRemix) {
+                        // For remixes, we tolerate duration differences ONLY as plain lyrics
+                        score -= 20
+                    } else {
+                        score -= 80 // Wrong version/track
+                    }
+                }
             }
         }
+
         return score
+    }
+
+    private fun hasTitleMatch(
+        queryTrack: String,
+        candidateTrack: String,
+        queryArtist: String = "",
+        candidateArtist: String = ""
+    ): Boolean {
+        val qClean = cleanForMatch(queryTrack)
+        val cClean = cleanForMatch(candidateTrack)
+
+        if (qClean.isBlank() || cClean.isBlank()) return false
+
+        // Exact match or direct containment
+        if (qClean == cClean || cClean.contains(qClean) || qClean.contains(cClean)) {
+            // Guard against numeric-only matches (e.g. "2026") matching unrelated foreign tracks
+            val isNumericOnly = qClean.all { it.isDigit() || it.isWhitespace() }
+            if (isNumericOnly) {
+                // For purely numeric titles like "2026", candidate MUST match artist or identified singer
+                val qArtistClean = cleanForMatch(queryArtist)
+                val cArtistClean = cleanForMatch(candidateArtist)
+                if (qArtistClean.isNotBlank() && cArtistClean.isNotBlank()) {
+                    val artistWords = qArtistClean.split(" ").filter { it.length >= 2 }
+                    val hasArtistOverlap = artistWords.any { cArtistClean.contains(it) }
+                    if (!hasArtistOverlap) return false
+                } else if (cArtistClean.isNotBlank()) {
+                    // If we don't have query artist, verify candidate isn't obscure foreign artist
+                    val isPopular = POPULAR_SINGERS.any { candidateArtist.contains(it, ignoreCase = true) }
+                    if (!isPopular) return false
+                }
+            }
+            return true
+        }
+
+        // Word overlap checking
+        val qWords = qClean.split(" ").filter { it.length >= 2 && it !in STOP_WORDS }
+        val cWords = cClean.split(" ").filter { it.length >= 2 && it !in STOP_WORDS }
+
+        if (qWords.isEmpty() || cWords.isEmpty()) return false
+
+        val matchingWords = qWords.count { qw ->
+            cWords.any { cw -> cw == qw || (cw.length >= 4 && qw.length >= 4 && (cw.startsWith(qw) || qw.startsWith(cw))) }
+        }
+
+        return if (qWords.size <= 2) {
+            matchingWords == qWords.size
+        } else {
+            (matchingWords.toFloat() / qWords.size.toFloat()) >= 0.5f || matchingWords >= 2
+        }
+    }
+
+    private val STOP_WORDS = setOf(
+        "song", "songs", "track", "audio", "video", "official", "music", "full", "hd", "4k", "lyric", "lyrics"
+    )
+
+    private fun cleanForMatch(text: String): String {
+        return text.lowercase()
+            .replace(Regex("\\(.*?\\)"), "")
+            .replace(Regex("\\[.*?\\]"), "")
+            .replace(Regex("[^a-z0-9\\s]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
     }
 
     private fun transliterateDevanagari(input: String): String {
@@ -345,6 +479,13 @@ object LyricsManager {
             else -> ""
         }
 
+        val isRemix = rawTitle.contains(Regex("(?i)(remix|\\bdj\\b|mashup|club\\s*mix|dance\\s*mix)"))
+
+        // Candidate 0 (if remix): Search specifically for remix cut
+        if (isRemix && extractedTitle.isNotBlank()) {
+            candidates.add(QueryCandidate(effectiveArtist, "$extractedTitle remix", "$extractedTitle remix $effectiveArtist"))
+        }
+
         // Candidate 1: Clean Track + Identified Singer/Artist
         if (extractedTitle.isNotBlank() && effectiveArtist.isNotBlank()) {
             candidates.add(QueryCandidate(effectiveArtist, extractedTitle, "$extractedTitle $effectiveArtist"))
@@ -407,13 +548,26 @@ object LyricsManager {
     }
 
     private fun cleanSearchQuery(query: String): String {
-        return query
+        var cleaned = query
             .replace(Regex("\\(.*?\\)"), "")
             .replace(Regex("\\[.*?\\]"), "")
-            .replace(Regex("(?i)(official\\s*video|official\\s*audio|music\\s*video|lyric\\s*video|full\\s*song|video\\s*song|lyrics?|remix|mashup|slowed|reverb|4k|hd|audio|video|teaser|trailer|song)"), "")
+            .replace(Regex("(?i)(official\\s*video|official\\s*audio|music\\s*video|lyric\\s*video|full\\s*song|video\\s*song|lyrics?|4k|hd|audio|video|teaser|trailer)"), "")
             .replace(Regex("[,:;!_#]"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
+
+        val words = cleaned.split(" ").filter { it.isNotBlank() }
+        if (words.size > 1) {
+            val withoutStop = cleaned
+                .replace(Regex("(?i)\\b(song|songs|track)\\b"), "")
+                .replace(Regex("\\b202[0-9]\\b"), "")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            if (withoutStop.isNotBlank()) {
+                cleaned = withoutStop
+            }
+        }
+        return cleaned.ifBlank { query.trim() }
     }
 
     private fun cleanArtistQuery(artist: String): String {

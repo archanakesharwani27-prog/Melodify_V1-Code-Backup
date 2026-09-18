@@ -63,6 +63,7 @@ class MusicService : MediaSessionService() {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 if (audioSessionId != C.AUDIO_SESSION_ID_UNSET && audioSessionId != 0) {
                     initVisualizer(audioSessionId)
+                    AudioEffectsManager.init(applicationContext, audioSessionId)
                     
                     // Notify system about our audio session
                     val intent = Intent(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
@@ -430,6 +431,7 @@ class MusicService : MediaSessionService() {
 
         audioVisualizer?.release()
         audioVisualizer = null
+        AudioEffectsManager.release()
         mediaSession?.run {
             player.release()
             release()

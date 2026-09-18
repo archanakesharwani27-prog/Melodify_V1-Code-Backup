@@ -56,6 +56,7 @@ class MelodifyDownloadManager(private val context: Context) {
         val track: TrackEntity,
         val url: String,
         val quality: String,
+        val isVideo: Boolean = false,
         val retryCount: Int = 0
     )
 
@@ -85,7 +86,7 @@ class MelodifyDownloadManager(private val context: Context) {
         }
     }
 
-    fun downloadSong(track: TrackEntity, audioUrl: String, quality: String, userTier: Int = 0, networkType: Int = 0) {
+    fun downloadMedia(track: TrackEntity, url: String, quality: String, isVideo: Boolean = false, userTier: Int = 0, networkType: Int = 0) {
         if (activeJobs.containsKey(track.id) || downloadQueue.any { it.track.id == track.id }) return
 
         currentNetworkPreference = networkType
@@ -93,7 +94,7 @@ class MelodifyDownloadManager(private val context: Context) {
         maxConcurrentDownloads = if (userTier >= 2) 5 else 2
 
         _queuedTracks.value += track
-        downloadQueue.add(DownloadRequest(track, audioUrl, quality, retryCount = 0))
+        downloadQueue.add(DownloadRequest(track, url, quality, isVideo = isVideo, retryCount = 0))
 
         if (!isNetworkAllowed(networkType)) {
             android.util.Log.i("MelodifyDownload", "Queued '${track.title}' waiting for preferred network connection")
@@ -102,6 +103,14 @@ class MelodifyDownloadManager(private val context: Context) {
         }
 
         processQueue(userTier)
+    }
+
+    fun downloadSong(track: TrackEntity, audioUrl: String, quality: String, userTier: Int = 0, networkType: Int = 0) {
+        downloadMedia(track, audioUrl, quality, isVideo = false, userTier = userTier, networkType = networkType)
+    }
+
+    fun downloadVideo(track: TrackEntity, videoUrl: String, quality: String, userTier: Int = 0, networkType: Int = 0) {
+        downloadMedia(track, videoUrl, quality, isVideo = true, userTier = userTier, networkType = networkType)
     }
 
     fun retryDownload(track: TrackEntity, quality: String, userTier: Int = 0, networkType: Int = 0) {
@@ -139,6 +148,7 @@ class MelodifyDownloadManager(private val context: Context) {
         val track = request.track
         val url = request.url
         val quality = request.quality
+        val isVideo = request.isVideo
         val retryCount = request.retryCount
 
         _queuedTracks.value = _queuedTracks.value.filter { it.id != track.id }
@@ -146,10 +156,17 @@ class MelodifyDownloadManager(private val context: Context) {
         val job = scope.launch {
             var file: File? = null
             try {
-                val folder = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
-                if (folder?.exists() == false) folder.mkdirs()
+                // App-private folder with .nomedia so files are hidden from phone gallery and removed on uninstall
+                val folder = File(context.getExternalFilesDir(null), "downloads").apply {
+                    if (!exists()) mkdirs()
+                    val noMedia = File(this, ".nomedia")
+                    if (!noMedia.exists()) {
+                        try { noMedia.createNewFile() } catch (e: Exception) {}
+                    }
+                }
 
-                file = File(folder, "${track.id}.mp3")
+                val ext = if (isVideo) "mp4" else "mp3"
+                file = File(folder, "${track.id}.$ext")
                 val okHttpRequest = Request.Builder().url(url).build()
 
                 client.newCall(okHttpRequest).execute().use { response ->
@@ -189,7 +206,7 @@ class MelodifyDownloadManager(private val context: Context) {
                                 if (now - lastProgressUpdate > 500) { // Update every 500ms
                                     val progress = currentBytes.toFloat() / totalBytes.toFloat()
                                     _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.DOWNLOADING, progress, totalMb, quality)) }
-                                    updateOngoingNotification(track, (progress * 100).toInt())
+                                    updateOngoingNotification(track, (progress * 100).toInt(), isVideo)
                                     lastProgressUpdate = now
                                 }
                             }
@@ -203,7 +220,7 @@ class MelodifyDownloadManager(private val context: Context) {
                     if (isActive) {
                         val updatedTrack = track.copy(isDownloaded = true, localFilePath = file.absolutePath)
                         trackDao.insertTrack(updatedTrack)
-                        showDownloadCompleteNotification(track, totalMb)
+                        showDownloadCompleteNotification(track, totalMb, isVideo)
                         _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.COMPLETED, 1f, totalMb, quality)) }
                     } else {
                         if (file.exists()) file.delete()
@@ -220,9 +237,9 @@ class MelodifyDownloadManager(private val context: Context) {
                     android.util.Log.i("MelodifyDownload", "Retrying download with renewed URL for ${track.title}")
                     try {
                         YouTubeExtractor.invalidateCache(track.id)
-                        val freshUrl = YouTubeExtractor.getAudioUrl(track.id, quality)
+                        val freshUrl = if (isVideo) YouTubeExtractor.getVideoUrl(track.id, quality) else YouTubeExtractor.getAudioUrl(track.id, quality)
                         if (freshUrl != null) {
-                            downloadQueue.add(0, DownloadRequest(track, freshUrl, quality, retryCount + 1))
+                            downloadQueue.add(0, DownloadRequest(track, freshUrl, quality, isVideo = isVideo, retryCount = retryCount + 1))
                             return@launch
                         }
                     } catch (retryEx: Exception) {
@@ -252,17 +269,18 @@ class MelodifyDownloadManager(private val context: Context) {
         _downloadStates.update { it - songId }
         cancelOngoingNotification(songId)
 
-        // Clean up partial file
-        val folder = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
-        val file = File(folder, "$songId.mp3")
-        if (file.exists()) file.delete()
+        // Clean up partial files
+        val folder = File(context.getExternalFilesDir(null), "downloads")
+        File(folder, "$songId.mp3").let { if (it.exists()) it.delete() }
+        File(folder, "$songId.mp4").let { if (it.exists()) it.delete() }
     }
 
-    private fun updateOngoingNotification(track: TrackEntity, progress: Int) {
+    private fun updateOngoingNotification(track: TrackEntity, progress: Int, isVideo: Boolean = false) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val typeStr = if (isVideo) "Video" else "Song"
         val notification = NotificationCompat.Builder(context, "download_channel")
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Downloading ${track.title}")
+            .setContentTitle("Downloading $typeStr: ${track.title}")
             .setContentText("$progress%")
             .setProgress(100, progress, false)
             .setOngoing(true)
@@ -272,11 +290,12 @@ class MelodifyDownloadManager(private val context: Context) {
         notificationManager.notify(track.id.hashCode(), notification)
     }
 
-    private fun showDownloadCompleteNotification(track: TrackEntity, size: String) {
+    private fun showDownloadCompleteNotification(track: TrackEntity, size: String, isVideo: Boolean = false) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val typeStr = if (isVideo) "Video" else "Song"
         val notification = NotificationCompat.Builder(context, "download_channel")
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("Download Complete")
+            .setContentTitle("$typeStr Download Complete")
             .setContentText("'${track.title}' ($size) is now available offline.")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)

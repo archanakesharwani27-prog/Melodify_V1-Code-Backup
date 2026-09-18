@@ -56,6 +56,7 @@ import coil.compose.AsyncImage
 import com.ansh.ytmusicpreimum.DownloadState
 import com.ansh.ytmusicpreimum.DownloadStatus
 import com.ansh.ytmusicpreimum.LyricsState
+import com.ansh.ytmusicpreimum.AudioEffectsManager
 import com.ansh.ytmusicpreimum.ui.components.AnimatedIconButton
 import com.ansh.ytmusicpreimum.ui.components.FuturisticThumbnail
 import com.ansh.ytmusicpreimum.ui.components.HeartBeatButton
@@ -261,7 +262,8 @@ fun PlayerPortrait(
     val rippleScale = remember { Animatable(0f) }
 
     var showQualityDialog by remember { mutableStateOf(false) }
-    var activeTab by remember { mutableStateOf<String?>(null) } // null: Artwork/Video, "lyrics": Synced Lyrics, "related": Similar Tracks
+    var showEffectsDialog by remember { mutableStateOf(false) }
+    var activeTab by remember { mutableStateOf<String?>(null) } // null: Artwork/Video, "lyrics": Synced Lyrics, "visualizer": Beat Spectrum, "related": Similar Tracks
 
     LaunchedEffect(mediaItem) {
         delay(250)
@@ -276,6 +278,12 @@ fun PlayerPortrait(
                 if (isVideoMode) onVideoQualityChange(q) else onAudioQualityChange(q)
             },
             onDismiss = { showQualityDialog = false }
+        )
+    }
+
+    if (showEffectsDialog) {
+        AudioEffectsDialog(
+            onDismiss = { showEffectsDialog = false }
         )
     }
 
@@ -421,6 +429,14 @@ fun PlayerPortrait(
                             leadingIcon = { Icon(Icons.Default.HighQuality, contentDescription = null, tint = Color.White) }
                         )
                         DropdownMenuItem(
+                            text = { Text("Sound Effects & Equalizer", color = Color.White) },
+                            onClick = { 
+                                showMenu = false
+                                showEffectsDialog = true
+                            },
+                            leadingIcon = { Icon(Icons.Default.GraphicEq, contentDescription = null, tint = Color.White) }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Download Song", color = Color.White) },
                             onClick = { 
                                 showMenu = false
@@ -470,6 +486,12 @@ fun PlayerPortrait(
                                 currentPosition = currentPosition,
                                 contentColor = contentColor,
                                 onSeekToLine = onSeek
+                            )
+                        }
+                        "visualizer" -> {
+                            LiveWaveCanvas(
+                                isPlaying = isPlaying,
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
                         "related" -> {
@@ -630,6 +652,33 @@ fun PlayerPortrait(
                         Text(
                             "Lyrics", 
                             color = if (activeTab == "lyrics") Color.White else Color.White.copy(alpha = 0.8f), 
+                            fontSize = 12.sp, 
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Visualizer Pill
+                Surface(
+                    onClick = { activeTab = if (activeTab == "visualizer") null else "visualizer" },
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (activeTab == "visualizer") MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.08f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (activeTab == "visualizer") MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.15f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.GraphicEq, 
+                            contentDescription = null, 
+                            tint = if (activeTab == "visualizer") Color.White else Color.White.copy(alpha = 0.8f), 
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "Visualizer", 
+                            color = if (activeTab == "visualizer") Color.White else Color.White.copy(alpha = 0.8f), 
                             fontSize = 12.sp, 
                             fontWeight = FontWeight.Bold
                         )
@@ -853,6 +902,7 @@ fun PlayerLandscape(
     BackHandler { onClose() }
     
     var showQualityDialog by remember { mutableStateOf(false) }
+    var showEffectsDialog by remember { mutableStateOf(false) }
 
     val currentTitle = remember(mediaItem) { 
         val raw = mediaItem.mediaMetadata.title?.toString() ?: "Unknown"
@@ -872,6 +922,12 @@ fun PlayerLandscape(
                 if (isVideoMode) onVideoQualityChange(q) else onAudioQualityChange(q)
             },
             onDismiss = { showQualityDialog = false }
+        )
+    }
+
+    if (showEffectsDialog) {
+        AudioEffectsDialog(
+            onDismiss = { showEffectsDialog = false }
         )
     }
 
@@ -975,7 +1031,14 @@ fun PlayerLandscape(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(36.dp))
+                AnimatedIconButton(onClick = { showEffectsDialog = true }) {
+                    Icon(
+                        Icons.Default.GraphicEq,
+                        contentDescription = "Equalizer",
+                        tint = contentColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -1489,5 +1552,94 @@ fun LyricsScreen(lyrics: String?, isFetching: Boolean, contentColor: Color) {
         currentPosition = 0L,
         contentColor = contentColor,
         onSeekToLine = {}
+    )
+}
+
+@Composable
+fun AudioEffectsDialog(
+    onDismiss: () -> Unit
+) {
+    val currentPreset by AudioEffectsManager.currentPreset.collectAsState()
+    val presets = AudioEffectsManager.AVAILABLE_PRESETS
+
+    val presetDescriptions = mapOf(
+        "Flat" to "Standard natural studio sound profile",
+        "Pop" to "Crisp vocal clarity with vibrant upper mids",
+        "Rock" to "Punchy bass with aggressive highs & tight kick",
+        "DJ / Dance" to "Club curve, heavy beat pump & fast dynamics",
+        "Bass Boost" to "Rich, deep warm bass frequency amplification",
+        "Deep Bass" to "Subwoofer focus: 60Hz max gain + hardware BassBoost 950",
+        "3D Surrounding Sound" to "Ultra-wide 3D spatial field (Virtualizer 1000)",
+        "Dolby Atmos / Studio" to "Professional master: Wide soundstage + +3.5dB Dynamic Gain"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(modifier = Modifier.width(10.dp))
+                Text("Sound Effects & Equalizer", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                presets.forEach { preset ->
+                    val isSelected = preset == currentPreset
+                    Surface(
+                        onClick = {
+                            AudioEffectsManager.applyPreset(preset)
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f),
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { AudioEffectsManager.applyPreset(preset) },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = preset,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 15.sp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White
+                                )
+                                presetDescriptions[preset]?.let { desc ->
+                                    Text(
+                                        text = desc,
+                                        fontSize = 11.sp,
+                                        color = Color.White.copy(alpha = 0.6f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Done", color = MaterialTheme.colorScheme.primary)
+            }
+        },
+        containerColor = Color(0xFF1E1E28),
+        shape = RoundedCornerShape(20.dp)
     )
 }

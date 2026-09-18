@@ -6,8 +6,18 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.tasks.await
 
 class TrackRepository(private val trackDao: TrackDao) {
+    companion object {
+        var currentSyncUserId: String? = null
+    }
+
     private val firestore = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
+
+    private fun getActiveUserId(): String? {
+        return auth.currentUser?.uid 
+            ?: auth.currentUser?.email?.replace(".", "_")
+            ?: currentSyncUserId
+    }
 
     val allTracks: Flow<List<TrackEntity>> = trackDao.getAllTracks()
     val likedTracks: Flow<List<TrackEntity>> = trackDao.getLikedTracks()
@@ -58,7 +68,7 @@ class TrackRepository(private val trackDao: TrackDao) {
 
     suspend fun deleteSearch(query: String) {
         trackDao.deleteSearch(query)
-        val userId = auth.currentUser?.uid ?: return
+        val userId = getActiveUserId() ?: return
         firestore.collection("users").document(userId)
             .collection("search_history").document(query.replace("/", "_"))
             .delete().await()
@@ -82,7 +92,7 @@ class TrackRepository(private val trackDao: TrackDao) {
     }
 
     private suspend fun syncTrackToCloud(track: TrackEntity) {
-        val userId = auth.currentUser?.uid ?: return
+        val userId = getActiveUserId() ?: return
         try {
             if (track.isLiked) {
                 firestore.collection("users").document(userId)
@@ -99,7 +109,7 @@ class TrackRepository(private val trackDao: TrackDao) {
     }
 
     private suspend fun syncHistoryToCloud(history: HistoryEntity) {
-        val userId = auth.currentUser?.uid ?: return
+        val userId = getActiveUserId() ?: return
         try {
             firestore.collection("users").document(userId)
                 .collection("history").document(history.trackId.replace("/", "_"))
@@ -110,7 +120,7 @@ class TrackRepository(private val trackDao: TrackDao) {
     }
 
     private suspend fun syncSearchHistoryToCloud(search: SearchHistoryEntity) {
-        val userId = auth.currentUser?.uid ?: return
+        val userId = getActiveUserId() ?: return
         try {
             firestore.collection("users").document(userId)
                 .collection("search_history").document(search.query.replace("/", "_"))
@@ -121,7 +131,7 @@ class TrackRepository(private val trackDao: TrackDao) {
     }
 
     suspend fun syncWithCloud() {
-        val userId = auth.currentUser?.uid ?: return
+        val userId = getActiveUserId() ?: return
         try {
             // 1. Sync Liked Tracks
             val likedSnapshot = firestore.collection("users").document(userId)
@@ -176,14 +186,14 @@ class TrackRepository(private val trackDao: TrackDao) {
     }
 
     suspend fun syncPlaylistToCloud(playlist: PlaylistEntity) {
-        val userId = auth.currentUser?.uid ?: return
+        val userId = getActiveUserId() ?: return
         firestore.collection("users").document(userId)
             .collection("playlists").document(playlist.id.toString())
             .set(playlist).await()
     }
 
     suspend fun syncTrackToPlaylistInCloud(playlistId: Long, trackId: String) {
-        val userId = auth.currentUser?.uid ?: return
+        val userId = getActiveUserId() ?: return
         val ref = PlaylistTrackCrossRef(playlistId, trackId)
         firestore.collection("users").document(userId)
             .collection("playlists").document(playlistId.toString())
