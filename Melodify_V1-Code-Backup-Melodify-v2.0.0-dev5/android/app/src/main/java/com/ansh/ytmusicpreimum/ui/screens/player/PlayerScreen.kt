@@ -90,6 +90,7 @@ fun PlayerScreen(
     lyrics: LyricsState,
     userTier: Int,
     downloadState: DownloadState?,
+    isOfflineTrack: Boolean = false,
     isVideoMode: Boolean = false,
     onToggleVideoMode: (Boolean) -> Unit = {},
     videoQuality: String = "720p",
@@ -132,6 +133,7 @@ fun PlayerScreen(
                 lyrics = lyrics,
                 userTier = userTier,
                 downloadState = downloadState,
+                isOfflineTrack = isOfflineTrack,
                 isVideoMode = isVideoMode,
                 onToggleVideoMode = onToggleVideoMode,
                 videoQuality = videoQuality,
@@ -171,6 +173,7 @@ fun PlayerScreen(
                 lyrics = lyrics,
                 userTier = userTier,
                 downloadState = downloadState,
+                isOfflineTrack = isOfflineTrack,
                 isVideoMode = isVideoMode,
                 onToggleVideoMode = onToggleVideoMode,
                 videoQuality = videoQuality,
@@ -215,6 +218,7 @@ fun PlayerPortrait(
     lyrics: LyricsState,
     userTier: Int,
     downloadState: DownloadState?,
+    isOfflineTrack: Boolean = false,
     isVideoMode: Boolean = false,
     onToggleVideoMode: (Boolean) -> Unit = {},
     videoQuality: String = "720p",
@@ -342,69 +346,96 @@ fun PlayerPortrait(
                     Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Close", tint = contentColor, modifier = Modifier.size(32.dp)) 
                 }
                 
-                // YouTube Music-Style Audio / Video Switcher Pill
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) { 
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White.copy(alpha = 0.12f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
-                    ) {
-                        Row(modifier = Modifier.padding(2.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                onClick = { 
-                                    onToggleVideoMode(false)
-                                    if (activeTab == null) {
-                                        // Reset to normal artwork
-                                    }
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (!isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                // If not offline track, show YouTube Music-Style Audio / Video Switcher Pill
+                if (!isOfflineTrack) {
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) { 
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color.White.copy(alpha = 0.12f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                        ) {
+                            Row(modifier = Modifier.padding(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    onClick = { 
+                                        onToggleVideoMode(false)
+                                    },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (!isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent
                                 ) {
-                                    Icon(
-                                        Icons.Default.MusicNote, 
-                                        contentDescription = null, 
-                                        tint = if (!isVideoMode) Color.White else Color.White.copy(alpha = 0.6f), 
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        "Song", 
-                                        color = if (!isVideoMode) Color.White else Color.White.copy(alpha = 0.6f), 
-                                        fontSize = 11.sp, 
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.MusicNote, 
+                                            contentDescription = null, 
+                                            tint = if (!isVideoMode) Color.White else Color.White.copy(alpha = 0.6f), 
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            "Song", 
+                                            color = if (!isVideoMode) Color.White else Color.White.copy(alpha = 0.6f), 
+                                            fontSize = 11.sp, 
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                                Surface(
+                                    onClick = { 
+                                        onToggleVideoMode(true)
+                                        activeTab = null // Switch to video display immediately
+                                    },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Videocam, 
+                                            contentDescription = null, 
+                                            tint = if (isVideoMode) Color.White else Color.White.copy(alpha = 0.6f), 
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            "Video", 
+                                            color = if (isVideoMode) Color.White else Color.White.copy(alpha = 0.6f), 
+                                            fontSize = 11.sp, 
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
-                            Surface(
-                                onClick = { 
-                                    onToggleVideoMode(true)
-                                    activeTab = null // Switch to video display immediately
-                                },
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent
+                        }
+                    }
+                } else {
+                    // Sleek Offline Song Badge
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFF1DB954).copy(alpha = 0.15f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1DB954).copy(alpha = 0.35f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Default.Videocam, 
-                                        contentDescription = null, 
-                                        tint = if (isVideoMode) Color.White else Color.White.copy(alpha = 0.6f), 
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        "Video", 
-                                        color = if (isVideoMode) Color.White else Color.White.copy(alpha = 0.6f), 
-                                        fontSize = 11.sp, 
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
+                                Icon(
+                                    Icons.Default.DownloadDone,
+                                    contentDescription = null,
+                                    tint = Color(0xFF1DB954),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    "Offline Audio",
+                                    color = Color(0xFF1DB954),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }
@@ -420,14 +451,22 @@ fun PlayerPortrait(
                         onDismissRequest = { showMenu = false },
                         offset = DpOffset(x = (-16).dp, y = 0.dp)
                     ) {
-                        DropdownMenuItem(
-                            text = { Text("Quality: ${if (isVideoMode) videoQuality else audioQuality}", color = Color.White) },
-                            onClick = { 
-                                showMenu = false
-                                showQualityDialog = true
-                            },
-                            leadingIcon = { Icon(Icons.Default.HighQuality, contentDescription = null, tint = Color.White) }
-                        )
+                        if (!isOfflineTrack) {
+                            DropdownMenuItem(
+                                text = { Text("Quality: ${if (isVideoMode) videoQuality else audioQuality}", color = Color.White) },
+                                onClick = { 
+                                    showMenu = false
+                                    showQualityDialog = true
+                                },
+                                leadingIcon = { Icon(Icons.Default.HighQuality, contentDescription = null, tint = Color.White) }
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text("Quality: Original (Offline)", color = Color.White) },
+                                onClick = { showMenu = false },
+                                leadingIcon = { Icon(Icons.Default.OfflinePin, contentDescription = null, tint = Color(0xFF1DB954)) }
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text("Sound Effects & Equalizer", color = Color.White) },
                             onClick = { 
@@ -436,14 +475,22 @@ fun PlayerPortrait(
                             },
                             leadingIcon = { Icon(Icons.Default.GraphicEq, contentDescription = null, tint = Color.White) }
                         )
-                        DropdownMenuItem(
-                            text = { Text("Download Song", color = Color.White) },
-                            onClick = { 
-                                showMenu = false
-                                onDownloadClick()
-                            },
-                            leadingIcon = { Icon(Icons.Default.Download, contentDescription = null, tint = Color.White) }
-                        )
+                        if (!isOfflineTrack) {
+                            DropdownMenuItem(
+                                text = { Text("Download Song", color = Color.White) },
+                                onClick = { 
+                                    showMenu = false
+                                    onDownloadClick()
+                                },
+                                leadingIcon = { Icon(Icons.Default.Download, contentDescription = null, tint = Color.White) }
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text("Saved to Offline Storage", color = Color(0xFF1DB954)) },
+                                onClick = { showMenu = false },
+                                leadingIcon = { Icon(Icons.Default.DownloadDone, contentDescription = null, tint = Color(0xFF1DB954)) }
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text("Add to Playlist", color = Color.White) },
                             onClick = { 
@@ -685,30 +732,32 @@ fun PlayerPortrait(
                     }
                 }
 
-                // Similar Tracks Pill
-                Surface(
-                    onClick = { activeTab = if (activeTab == "related") null else "related" },
-                    shape = RoundedCornerShape(20.dp),
-                    color = if (activeTab == "related") MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.08f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, if (activeTab == "related") MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.15f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                // Similar Tracks Pill (Online only)
+                if (!isOfflineTrack) {
+                    Surface(
+                        onClick = { activeTab = if (activeTab == "related") null else "related" },
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (activeTab == "related") MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.08f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, if (activeTab == "related") MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.15f))
                     ) {
-                        Icon(
-                            Icons.Default.AutoAwesome, 
-                            contentDescription = null, 
-                            tint = if (activeTab == "related") Color.White else Color.White.copy(alpha = 0.8f), 
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            "Similar Tracks", 
-                            color = if (activeTab == "related") Color.White else Color.White.copy(alpha = 0.8f), 
-                            fontSize = 12.sp, 
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.AutoAwesome, 
+                                contentDescription = null, 
+                                tint = if (activeTab == "related") Color.White else Color.White.copy(alpha = 0.8f), 
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "Similar Tracks", 
+                                color = if (activeTab == "related") Color.White else Color.White.copy(alpha = 0.8f), 
+                                fontSize = 12.sp, 
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
 
@@ -871,6 +920,7 @@ fun PlayerLandscape(
     lyrics: LyricsState,
     userTier: Int,
     downloadState: DownloadState?,
+    isOfflineTrack: Boolean = false,
     isVideoMode: Boolean = false,
     onToggleVideoMode: (Boolean) -> Unit = {},
     videoQuality: String = "720p",
@@ -971,61 +1021,90 @@ fun PlayerLandscape(
                     )
                 }
 
-                // YouTube Music-Style Audio / Video Switcher Pill
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color.White.copy(alpha = 0.12f),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
-                    ) {
-                        Row(modifier = Modifier.padding(2.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                onClick = { onToggleVideoMode(false) },
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (!isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                // Audio / Video Switcher Pill (Online) vs Offline Badge (Local)
+                if (!isOfflineTrack) {
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color.White.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                        ) {
+                            Row(modifier = Modifier.padding(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    onClick = { onToggleVideoMode(false) },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (!isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent
                                 ) {
-                                    Icon(
-                                        Icons.Default.MusicNote,
-                                        contentDescription = null,
-                                        tint = if (!isVideoMode) Color.White else Color.White.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        "Song",
-                                        color = if (!isVideoMode) Color.White else Color.White.copy(alpha = 0.6f),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.MusicNote,
+                                            contentDescription = null,
+                                            tint = if (!isVideoMode) Color.White else Color.White.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            "Song",
+                                            color = if (!isVideoMode) Color.White else Color.White.copy(alpha = 0.6f),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                                Surface(
+                                    onClick = { onToggleVideoMode(true) },
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = if (isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Videocam,
+                                            contentDescription = null,
+                                            tint = if (isVideoMode) Color.White else Color.White.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            "Video",
+                                            color = if (isVideoMode) Color.White else Color.White.copy(alpha = 0.6f),
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
-                            Surface(
-                                onClick = { onToggleVideoMode(true) },
-                                shape = RoundedCornerShape(16.dp),
-                                color = if (isVideoMode) MaterialTheme.colorScheme.primary else Color.Transparent
+                        }
+                    }
+                } else {
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = Color(0xFF1DB954).copy(alpha = 0.15f),
+                            border = BorderStroke(1.dp, Color(0xFF1DB954).copy(alpha = 0.35f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Default.Videocam,
-                                        contentDescription = null,
-                                        tint = if (isVideoMode) Color.White else Color.White.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(13.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        "Video",
-                                        color = if (isVideoMode) Color.White else Color.White.copy(alpha = 0.6f),
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
+                                Icon(
+                                    Icons.Default.DownloadDone,
+                                    contentDescription = null,
+                                    tint = Color(0xFF1DB954),
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    "Offline Audio",
+                                    color = Color(0xFF1DB954),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }

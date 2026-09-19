@@ -117,6 +117,7 @@ fun MainScreen(
     val isFetchingLyrics by musicViewModel.isFetchingLyrics.collectAsState()
     val isVideoMode by musicViewModel.isVideoMode.collectAsState()
     val videoQuality by musicViewModel.videoQuality.collectAsState()
+    val isCurrentTrackOffline by musicViewModel.isCurrentTrackOffline.collectAsState()
     val relatedTracks by musicViewModel.relatedTracks.collectAsState()
     val isLoadingRelated by musicViewModel.isLoadingRelated.collectAsState()
     val playerController by musicViewModel.mediaControllerState.collectAsState()
@@ -546,6 +547,7 @@ fun MainScreen(
                         lyrics = lyrics,
                         userTier = userTier,
                         downloadState = downloadStates[mediaItem.mediaId],
+                        isOfflineTrack = isCurrentTrackOffline,
                         isVideoMode = isVideoMode,
                         onToggleVideoMode = { musicViewModel.setVideoMode(it) },
                         videoQuality = videoQuality,
@@ -557,12 +559,16 @@ fun MainScreen(
                         onPlayRelatedTrack = { musicViewModel.playRelatedTrack(it) },
                         playerController = playerController,
                         onDownloadClick = {
-                            trackToDownload = TrackEntity(
-                                id = mediaItem.mediaId,
-                                title = mediaItem.mediaMetadata.title?.toString() ?: "Unknown",
-                                artist = mediaItem.mediaMetadata.artist?.toString() ?: "Unknown",
-                                thumbnailUrl = mediaItem.mediaMetadata.artworkUri?.toString() ?: ""
-                            )
+                            if (isCurrentTrackOffline) {
+                                Toast.makeText(context, "This track is already available offline", Toast.LENGTH_SHORT).show()
+                            } else {
+                                trackToDownload = TrackEntity(
+                                    id = mediaItem.mediaId,
+                                    title = mediaItem.mediaMetadata.title?.toString() ?: "Unknown",
+                                    artist = mediaItem.mediaMetadata.artist?.toString() ?: "Unknown",
+                                    thumbnailUrl = mediaItem.mediaMetadata.artworkUri?.toString() ?: ""
+                                )
+                            }
                         },
                         onCancelDownload = {
                             musicViewModel.cancelDownload(mediaItem.mediaId)

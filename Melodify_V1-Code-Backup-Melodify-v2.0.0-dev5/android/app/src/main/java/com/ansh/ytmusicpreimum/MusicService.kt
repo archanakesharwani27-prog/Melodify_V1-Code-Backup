@@ -2,6 +2,8 @@ package com.ansh.ytmusicpreimum
 
 import android.content.Intent
 import android.content.Context
+import android.os.PowerManager
+import android.net.wifi.WifiManager
 import kotlinx.coroutines.*
 import android.os.Bundle
 import androidx.annotation.OptIn
@@ -29,9 +31,23 @@ object VisualizerData {
 
 class MusicService : MediaSessionService() {
 
+    companion object {
+        var instance: MusicService? = null
+            private set
+
+        fun reinitVisualizer() {
+            instance?.let { service ->
+                val sessionId = service.exoPlayer.audioSessionId
+                service.initVisualizer(sessionId)
+            }
+        }
+    }
+
     private var mediaSession: MediaSession? = null
     private lateinit var exoPlayer: ExoPlayer
     private var audioVisualizer: Visualizer? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var fadeJob: Job? = null
@@ -40,6 +56,7 @@ class MusicService : MediaSessionService() {
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
+        instance = this
         
         val sharedPrefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
         crossfadeDurationMs = sharedPrefs.getLong("crossfade_duration", 0L)
@@ -107,11 +124,13 @@ class MusicService : MediaSessionService() {
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) {
-                    startBackgroundCheck()
-                }
+                updateLocks(isPlaying)
                 try {
-                    audioVisualizer?.enabled = isPlaying
+                    if (audioVisualizer == null && isPlaying) {
+                        initVisualizer(exoPlayer.audioSessionId)
+                    } else {
+                        audioVisualizer?.enabled = isPlaying
+                    }
                 } catch (t: Throwable) {
                     android.util.Log.w("MusicService", "Failed to toggle visualizer state", t)
                 }
@@ -312,7 +331,7 @@ class MusicService : MediaSessionService() {
         }
     }
 
-    private fun initVisualizer(audioSessionId: Int) {
+    fun initVisualizer(audioSessionId: Int) {
         if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) 
             != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             android.util.Log.d("MusicService", "RECORD_AUDIO permission not granted, hardware visualizer bypassed")
@@ -326,14 +345,23 @@ class MusicService : MediaSessionService() {
             }
             audioVisualizer = null
 
-            val v = Visualizer(audioSessionId)
+            val targetSession = if (audioSessionId != C.AUDIO_SESSION_ID_UNSET && audioSessionId != 0) audioSessionId else 0
+            val v = try {
+                Visualizer(targetSession)
+            } catch (e: Exception) {
+                if (targetSession != 0) {
+                    Visualizer(0)
+                } else {
+                    throw e
+                }
+            }
             val range = Visualizer.getCaptureSizeRange()
             if (range != null && range.size >= 2) {
                 val targetSize = 512.coerceIn(range[0], range[1])
                 v.captureSize = targetSize
             }
             val maxRate = Visualizer.getMaxCaptureRate()
-            val rate = if (maxRate > 0) maxRate / 4 else 10000
+            val rate = if (maxRate > 0) maxRate.coerceAtMost(20000) else 20000
 
             v.setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
                 override fun onWaveFormDataCapture(visualizer: Visualizer?, waveform: ByteArray?, samplingRate: Int) {
@@ -350,6 +378,7 @@ class MusicService : MediaSessionService() {
             } catch (t: Throwable) {}
 
             audioVisualizer = v
+            android.util.Log.i("MusicService", "Visualizer initialized successfully for session $targetSession at rate $rate mHz")
         } catch (t: Throwable) {
             android.util.Log.e("MusicService", "Failed to init Visualizer safely", t)
             audioVisualizer = null
@@ -357,34 +386,31 @@ class MusicService : MediaSessionService() {
     }
 
 
-    private var backgroundCheckJob: Job? = null
-    private fun startBackgroundCheck() {
-        backgroundCheckJob?.cancel()
-        backgroundCheckJob = serviceScope.launch {
-            val authPrefs = getSharedPreferences("auth", Context.MODE_PRIVATE)
-            while (isActive && exoPlayer.isPlaying) {
-                delay(5000) // 5 seconds for battery efficiency
-                val isLoggedIn = authPrefs.getBoolean("is_logged_in", false)
-                val userEmail = authPrefs.getString("user_email", "") ?: ""
-                val isGuest = userEmail == "guest@melodify.com" || userEmail.isEmpty()
-                
-                if ((!isLoggedIn || isGuest) && !isAppInForeground() && exoPlayer.isPlaying) {
-                    exoPlayer.pause()
-                    authPrefs.edit().putBoolean("guest_pause_triggered", true).apply()
+    private fun updateLocks(isPlaying: Boolean) {
+        try {
+            if (isPlaying) {
+                if (wakeLock == null) {
+                    val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                    wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Melodify:PlaybackWakeLock")?.apply {
+                        setReferenceCounted(false)
+                    }
                 }
-            }
-        }
-    }
+                wakeLock?.acquire(60 * 60 * 1000L) // 60 min safety timeout
 
-    private fun isAppInForeground(): Boolean {
-        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        val appProcesses = activityManager.runningAppProcesses ?: return false
-        for (appProcess in appProcesses) {
-            if (appProcess.importance == android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND && appProcess.processName == packageName) {
-                return true
+                if (wifiLock == null) {
+                    val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                    wifiLock = wifiManager?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Melodify:PlaybackWifiLock")?.apply {
+                        setReferenceCounted(false)
+                    }
+                }
+                wifiLock?.acquire()
+            } else {
+                wakeLock?.let { if (it.isHeld) it.release() }
+                wifiLock?.let { if (it.isHeld) it.release() }
             }
+        } catch (t: Throwable) {
+            android.util.Log.w("MusicService", "Failed to update wake/wifi locks", t)
         }
-        return false
     }
 
     private fun startPositionMonitor() {
@@ -471,6 +497,15 @@ class MusicService : MediaSessionService() {
             player.release()
             release()
             mediaSession = null
+        }
+        try {
+            wakeLock?.let { if (it.isHeld) it.release() }
+            wifiLock?.let { if (it.isHeld) it.release() }
+        } catch (t: Throwable) {}
+        wakeLock = null
+        wifiLock = null
+        if (instance == this) {
+            instance = null
         }
         super.onDestroy()
     }

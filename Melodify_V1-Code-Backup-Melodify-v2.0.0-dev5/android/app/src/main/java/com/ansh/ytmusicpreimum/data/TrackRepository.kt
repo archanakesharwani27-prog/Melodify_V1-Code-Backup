@@ -37,15 +37,19 @@ class TrackRepository(private val trackDao: TrackDao) {
     }
 
     suspend fun addToHistory(track: TrackEntity) {
-        val historyItem = HistoryEntity(
-            trackId = track.id,
-            title = track.title,
-            artist = track.artist,
-            thumbnailUrl = track.thumbnailUrl,
-            timestamp = System.currentTimeMillis() // Update timestamp to bring to top
-        )
-        trackDao.insertHistory(historyItem)
-        syncHistoryToCloud(historyItem)
+        try {
+            val historyItem = HistoryEntity(
+                trackId = track.id,
+                title = track.title,
+                artist = track.artist,
+                thumbnailUrl = track.thumbnailUrl,
+                timestamp = System.currentTimeMillis() // Update timestamp to bring to top
+            )
+            trackDao.insertHistory(historyItem)
+            syncHistoryToCloud(historyItem)
+        } catch (t: Throwable) {
+            t.printStackTrace()
+        }
     }
 
     suspend fun enrichTracks(tracks: List<TrackEntity>): List<TrackEntity> {
@@ -64,9 +68,13 @@ class TrackRepository(private val trackDao: TrackDao) {
 
     suspend fun addToSearchHistory(query: String) {
         if (query.isBlank()) return
-        val item = SearchHistoryEntity(query = query, timestamp = System.currentTimeMillis())
-        trackDao.insertSearch(item)
-        syncSearchHistoryToCloud(item)
+        try {
+            val item = SearchHistoryEntity(query = query, timestamp = System.currentTimeMillis())
+            trackDao.insertSearch(item)
+            syncSearchHistoryToCloud(item)
+        } catch (t: Throwable) {
+            t.printStackTrace()
+        }
     }
 
     suspend fun deleteSearch(query: String) {
@@ -77,7 +85,7 @@ class TrackRepository(private val trackDao: TrackDao) {
             fs.collection("users").document(userId)
                 .collection("search_history").document(query.replace("/", "_"))
                 .delete().await()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
         }
     }
@@ -112,7 +120,7 @@ class TrackRepository(private val trackDao: TrackDao) {
                     .collection("liked_tracks").document(track.id.replace("/", "_"))
                     .delete().await()
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
         }
     }
@@ -124,7 +132,7 @@ class TrackRepository(private val trackDao: TrackDao) {
             fs.collection("users").document(userId)
                 .collection("history").document(history.trackId.replace("/", "_"))
                 .set(history).await()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
         }
     }
@@ -136,7 +144,7 @@ class TrackRepository(private val trackDao: TrackDao) {
             fs.collection("users").document(userId)
                 .collection("search_history").document(search.query.replace("/", "_"))
                 .set(search).await()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
         }
     }
@@ -171,7 +179,7 @@ class TrackRepository(private val trackDao: TrackDao) {
 
             // 4. Sync Playlists
             syncPlaylistsFromCloud(userId)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
         }
     }
@@ -193,7 +201,7 @@ class TrackRepository(private val trackDao: TrackDao) {
                     trackDao.insertTrackToPlaylist(ref)
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
         }
     }
@@ -205,7 +213,7 @@ class TrackRepository(private val trackDao: TrackDao) {
             fs.collection("users").document(userId)
                 .collection("playlists").document(playlist.id.toString())
                 .set(playlist).await()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             android.util.Log.e("TrackRepository", "Error syncing playlist to cloud", e)
         }
     }
@@ -219,7 +227,7 @@ class TrackRepository(private val trackDao: TrackDao) {
                 .collection("playlists").document(playlistId.toString())
                 .collection("tracks").document(trackId.replace("/", "_"))
                 .set(ref).await()
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             android.util.Log.e("TrackRepository", "Error syncing playlist track to cloud", e)
         }
     }

@@ -77,7 +77,9 @@ android {
 }
 
 configurations.all {
-    exclude(group = "com.google.firebase", module = "protolite-well-known-types")
+    resolutionStrategy {
+        force("com.google.protobuf:protobuf-javalite:3.25.5")
+    }
 }
 
 dependencies {

@@ -162,3 +162,33 @@ fun AboutFeatureItem(title: String, desc: String, icon: ImageVector) {
         }
     }
 }
+
+@Composable
+fun UpgradeOption(
+    title: String,
+    price: String,
+    desc: String,
+    color: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFF1E1E1E),
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.Bold, color = color, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(desc, color = Color.Gray, fontSize = 12.sp)
+            }
+            Text(price, fontWeight = FontWeight.ExtraBold, color = Color.White, fontSize = 18.sp)
+        }
+    }
+}
+

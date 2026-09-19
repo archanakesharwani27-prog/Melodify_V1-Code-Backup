@@ -83,6 +83,39 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _playbackError = MutableStateFlow<String?>(null)
     val playbackError: StateFlow<String?> = _playbackError
 
+    private val _isCurrentTrackOffline = MutableStateFlow(false)
+    val isCurrentTrackOffline: StateFlow<Boolean> = _isCurrentTrackOffline.asStateFlow()
+
+    fun updateOfflineStatus(mediaId: String?) {
+        if (mediaId.isNullOrEmpty()) {
+            _isCurrentTrackOffline.value = false
+            return
+        }
+        if (mediaId.startsWith("content://") || mediaId.startsWith("file://")) {
+            _isCurrentTrackOffline.value = true
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val dbTrack = trackDao.getTrackById(mediaId)
+                val isOffline = dbTrack?.isDownloaded == true && dbTrack.localFilePath != null && java.io.File(dbTrack.localFilePath).exists()
+                _isCurrentTrackOffline.value = isOffline
+            } catch (t: Throwable) {
+                _isCurrentTrackOffline.value = false
+            }
+        }
+    }
+
+    fun syncWithCloud() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.syncWithCloud()
+            } catch (e: Exception) {
+                android.util.Log.e("MusicViewModel", "Failed to sync with cloud", e)
+            }
+        }
+    }
+
     private var isPreparingManually = false
     private val urlCache = mutableMapOf<String, String>()
     private var prefetchJob: Job? = null
@@ -415,6 +448,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 .build()
             
             _currentMediaItem.value = restoredItem
+            updateOfflineStatus(lastMediaId)
             _currentPosition.value = position
             _shuffleModeEnabled.value = shuffle
             _repeatMode.value = repeat
@@ -446,6 +480,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     // Priority: 1. Controller's active item, 2. Restored item
                     if (controller.currentMediaItem != null) {
                         _currentMediaItem.value = controller.currentMediaItem
+                        updateOfflineStatus(controller.currentMediaItem?.mediaId)
                         _isPlaying.value = controller.isPlaying
                         _duration.value = controller.duration.coerceAtLeast(0L)
                         _currentPosition.value = controller.currentPosition
@@ -480,6 +515,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             if (now - lastManualPlayTime > 2000) {
                                 if (mediaItem != null) {
                                     _currentMediaItem.value = mediaItem
+                                    updateOfflineStatus(mediaItem.mediaId)
                                 }
                             }
                             _duration.value = controller.duration.coerceAtLeast(0L)
@@ -723,6 +759,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     currentController.prepare()
                     currentController.play()
                 }
+                updateOfflineStatus(videoId)
                 
                 if (!isLocal) {
                     prefetchNext()
