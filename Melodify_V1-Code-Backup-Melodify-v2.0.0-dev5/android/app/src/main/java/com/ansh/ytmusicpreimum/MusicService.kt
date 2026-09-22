@@ -57,12 +57,16 @@ class MusicService : MediaSessionService() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var fadeJob: Job? = null
     private var crossfadeDurationMs = 0L // 0 means disabled
+    private var pauseTimestamp = 0L
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
         instance = this
         
+        HapticBassManager.init(applicationContext)
+        AmbientSoundscapeManager.init(applicationContext)
+
         val sharedPrefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
         crossfadeDurationMs = sharedPrefs.getLong("crossfade_duration", 0L)
 
@@ -121,6 +125,17 @@ class MusicService : MediaSessionService() {
                 updateLocks(isPlaying)
                 if (isPlaying) {
                     initAudioEffects()
+                    // Smart Rewind: if paused for >12s, rewind 3s to restore context
+                    if (pauseTimestamp > 0L) {
+                        val elapsed = System.currentTimeMillis() - pauseTimestamp
+                        if (elapsed > 12_000L && exoPlayer.currentPosition > 4_000L) {
+                            val target = (exoPlayer.currentPosition - 3_000L).coerceAtLeast(0L)
+                            exoPlayer.seekTo(target)
+                        }
+                        pauseTimestamp = 0L
+                    }
+                } else {
+                    pauseTimestamp = System.currentTimeMillis()
                 }
                 try {
                     if (audioVisualizer == null && isPlaying) {
@@ -431,7 +446,10 @@ class MusicService : MediaSessionService() {
                 }
 
                 override fun onFftDataCapture(visualizer: Visualizer?, fft: ByteArray?, samplingRate: Int) {
-                    fft?.let { VisualizerData.fftData.value = it.copyOf() }
+                    fft?.let {
+                        VisualizerData.fftData.value = it.copyOf()
+                        HapticBassManager.processFft(it)
+                    }
                 }
             }, rate, true, true)
 
@@ -478,15 +496,22 @@ class MusicService : MediaSessionService() {
     private fun startPositionMonitor() {
         serviceScope.launch {
             while (isActive) {
-                delay(500)
-                if (exoPlayer.isPlaying && crossfadeDurationMs > 0) {
-                    val duration = exoPlayer.duration
+                delay(200)
+                if (exoPlayer.isPlaying) {
                     val position = exoPlayer.currentPosition
-                    if (duration > 0 && (duration - position) <= crossfadeDurationMs) { 
-                        fadeOut(crossfadeDurationMs)
-                        // Note: Media3 will automatically transition to the next item
-                        // when the current one ends. The fadeIn will be triggered in onMediaItemTransition.
-                        delay(crossfadeDurationMs + 500)
+                    val loopTarget = ABLooperManager.checkLoop(position)
+                    if (loopTarget != null) {
+                        exoPlayer.seekTo(loopTarget)
+                    }
+
+                    if (crossfadeDurationMs > 0) {
+                        val duration = exoPlayer.duration
+                        if (duration > 0 && (duration - position) <= crossfadeDurationMs) { 
+                            fadeOut(crossfadeDurationMs)
+                            // Note: Media3 will automatically transition to the next item
+                            // when the current one ends. The fadeIn will be triggered in onMediaItemTransition.
+                            delay(crossfadeDurationMs + 500)
+                        }
                     }
                 }
             }
@@ -555,6 +580,7 @@ class MusicService : MediaSessionService() {
         } catch (t: Throwable) {}
         audioVisualizer = null
         AudioEffectsManager.release()
+        AmbientSoundscapeManager.stop()
         mediaSession?.run {
             player.release()
             release()

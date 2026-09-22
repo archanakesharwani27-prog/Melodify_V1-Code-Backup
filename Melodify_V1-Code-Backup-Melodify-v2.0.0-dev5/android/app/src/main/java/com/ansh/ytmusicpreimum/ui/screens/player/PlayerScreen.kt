@@ -62,6 +62,9 @@ import com.ansh.ytmusicpreimum.DownloadState
 import com.ansh.ytmusicpreimum.DownloadStatus
 import com.ansh.ytmusicpreimum.LyricsState
 import com.ansh.ytmusicpreimum.AudioEffectsManager
+import com.ansh.ytmusicpreimum.ABLooperManager
+import com.ansh.ytmusicpreimum.HapticBassManager
+import com.ansh.ytmusicpreimum.AmbientSoundscapeManager
 import com.ansh.ytmusicpreimum.ui.components.AnimatedIconButton
 import com.ansh.ytmusicpreimum.ui.components.FuturisticThumbnail
 import com.ansh.ytmusicpreimum.ui.components.HeartBeatButton
@@ -563,6 +566,12 @@ fun PlayerPortrait(
                                 onTrackClick = onPlayRelatedTrack
                             )
                         }
+                        "ab_looper" -> {
+                            ABLooperCard(
+                                currentPosition = currentPosition,
+                                onSeek = onSeek
+                            )
+                        }
                         else -> {
                             // Video or Album Artwork
                             if (isVideoMode) {
@@ -773,6 +782,34 @@ fun PlayerPortrait(
                                 fontWeight = FontWeight.Bold
                             )
                         }
+                    }
+                }
+
+                // A-B Looper Pill
+                val isLoopActive by ABLooperManager.isLooping.collectAsState()
+                Surface(
+                    onClick = { activeTab = if (activeTab == "ab_looper") null else "ab_looper" },
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (activeTab == "ab_looper" || isLoopActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.08f),
+                    border = BorderStroke(1.dp, if (activeTab == "ab_looper" || isLoopActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.15f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Repeat, 
+                            contentDescription = null, 
+                            tint = if (activeTab == "ab_looper" || isLoopActive) Color.White else Color.White.copy(alpha = 0.8f), 
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            if (isLoopActive) "Loop Active" else "A-B Looper", 
+                            color = if (activeTab == "ab_looper" || isLoopActive) Color.White else Color.White.copy(alpha = 0.8f), 
+                            fontSize = 12.sp, 
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
 
@@ -1650,6 +1687,159 @@ fun LyricsScreen(lyrics: String?, isFetching: Boolean, contentColor: Color) {
 }
 
 @Composable
+fun ABLooperCard(
+    currentPosition: Long,
+    onSeek: (Long) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val pointA by ABLooperManager.pointA.collectAsState()
+    val pointB by ABLooperManager.pointB.collectAsState()
+    val isLooping by ABLooperManager.isLooping.collectAsState()
+
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = Color(0xFF141420),
+        border = BorderStroke(1.5.dp, if (isLooping) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.12f)),
+        modifier = modifier.fillMaxSize()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Repeat,
+                        contentDescription = null,
+                        tint = if (isLooping) MaterialTheme.colorScheme.primary else Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "A-B Hook & Segment Looper",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        color = Color.White
+                    )
+                }
+                if (isLooping) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text(
+                            text = "ACTIVE",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            // Current Time & Loop Status
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = formatTime(currentPosition),
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                val loopDescription = if (pointA != null && pointB != null) {
+                    val durationSec = ((pointB!! - pointA!!) / 1000).coerceAtLeast(1)
+                    "Repeating ${formatTime(pointA!!)} → ${formatTime(pointB!!)} (${durationSec}s loop)"
+                } else if (pointA != null) {
+                    "Point A locked at ${formatTime(pointA!!)}. Tap [Set B] to loop."
+                } else {
+                    "Tap [Set Point A] to mark start of loop"
+                }
+                Text(
+                    text = loopDescription,
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            // A and B Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = { ABLooperManager.setPointA(currentPosition) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (pointA != null) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.12f)
+                    )
+                ) {
+                    Text(
+                        text = if (pointA != null) "A: ${formatTime(pointA!!)}" else "Set Point [A]",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+
+                Button(
+                    onClick = { ABLooperManager.setPointB(currentPosition) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (pointB != null) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.12f)
+                    )
+                ) {
+                    Text(
+                        text = if (pointB != null) "B: ${formatTime(pointB!!)}" else "Set Point [B]",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            // Actions (Clear / Toggle)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (pointA != null || pointB != null) {
+                    OutlinedButton(
+                        onClick = { ABLooperManager.clearLoop() },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Clear Loop", fontSize = 11.sp)
+                    }
+                }
+                if (pointA != null && pointB != null) {
+                    Button(
+                        onClick = {
+                            ABLooperManager.toggleLoop()
+                            val a = pointA
+                            if (!isLooping && a != null) onSeek(a)
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(if (isLooping) "Pause Loop" else "Resume Loop", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun AudioEffectsDialog(
     onDismiss: () -> Unit
 ) {
@@ -1665,6 +1855,11 @@ fun AudioEffectsDialog(
     val bassBoostStrength by AudioEffectsManager.bassBoostStrength.collectAsState()
     val virtualizerStrength by AudioEffectsManager.virtualizerStrength.collectAsState()
     val loudnessGain by AudioEffectsManager.loudnessGain.collectAsState()
+
+    val isHapticEnabled by HapticBassManager.isEnabled.collectAsState()
+    val hapticIntensity by HapticBassManager.intensity.collectAsState()
+    val ambientSoundscape by AmbientSoundscapeManager.selectedSoundscape.collectAsState()
+    val ambientVolume by AmbientSoundscapeManager.volume.collectAsState()
 
     val presets = AudioEffectsManager.AVAILABLE_PRESETS
     val minLevel = AudioEffectsManager.minBandLevel
@@ -1968,6 +2163,152 @@ fun AudioEffectsDialog(
                             inactiveTrackColor = Color.White.copy(alpha = 0.1f)
                         )
                     )
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 1.dp)
+
+                // Haptic Bass Subwoofer Section
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Vibration,
+                                contentDescription = null,
+                                tint = Color(0xFFE040FB),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    "Haptic Bass Subwoofer",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = Color.White
+                                )
+                                Text(
+                                    "Feel bass drop kicks in your hands",
+                                    fontSize = 10.sp,
+                                    color = Color.White.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = isHapticEnabled,
+                            onCheckedChange = { HapticBassManager.setEnabled(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFFE040FB),
+                                uncheckedThumbColor = Color.LightGray,
+                                uncheckedTrackColor = Color.DarkGray
+                            )
+                        )
+                    }
+                    if (isHapticEnabled) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Vibration Force", fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f))
+                            Text("${(hapticIntensity * 100).toInt()}%", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE040FB))
+                        }
+                        Slider(
+                            value = hapticIntensity,
+                            onValueChange = { HapticBassManager.setIntensity(it) },
+                            valueRange = 0.1f..1.0f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(0xFFE040FB),
+                                activeTrackColor = Color(0xFFE040FB),
+                                inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                            )
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 1.dp)
+
+                // Ambient Lo-Fi Soundscape Layer Section
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Cloud,
+                                contentDescription = null,
+                                tint = Color(0xFF64B5F6),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    "Ambient Soundscape Layer",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = Color.White
+                                )
+                                Text(
+                                    "Overlay relaxing rain, cafe, or vinyl crackle",
+                                    fontSize = 10.sp,
+                                    color = Color.White.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        AmbientSoundscapeManager.AVAILABLE_SOUNDSCAPES.forEach { soundscape ->
+                            val isSelected = soundscape == ambientSoundscape
+                            Surface(
+                                onClick = { AmbientSoundscapeManager.selectSoundscape(soundscape) },
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isSelected) Color(0xFF1E88E5) else Color.White.copy(alpha = 0.07f),
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) Color(0xFF64B5F6) else Color.White.copy(alpha = 0.12f)
+                                )
+                            ) {
+                                Text(
+                                    text = soundscape,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                    if (ambientSoundscape != "Off") {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Ambient Mix Volume", fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f))
+                            Text("${(ambientVolume * 100 / 0.6f).toInt()}%", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF64B5F6))
+                        }
+                        Slider(
+                            value = ambientVolume,
+                            onValueChange = { AmbientSoundscapeManager.setVolume(it) },
+                            valueRange = 0.05f..0.6f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(0xFF64B5F6),
+                                activeTrackColor = Color(0xFF64B5F6),
+                                inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                            )
+                        )
+                    }
                 }
             }
         },
