@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ansh.ytmusicpreimum.DownloadState
 import com.ansh.ytmusicpreimum.DownloadStatus
+import com.ansh.ytmusicpreimum.SongShareHelper
 import com.ansh.ytmusicpreimum.data.TrackEntity
 import com.ansh.ytmusicpreimum.ui.theme.*
 
@@ -42,6 +44,7 @@ fun TrackItem(
     trailingContent: (@Composable () -> Unit)? = null,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -211,7 +214,16 @@ fun TrackItem(
                         )
                         DropdownMenuItem(
                             text = { Text("Share") },
-                            onClick = { showMenu = false },
+                            onClick = { 
+                                showMenu = false
+                                SongShareHelper.shareTrack(
+                                    context = context,
+                                    title = track.title,
+                                    artist = track.artist,
+                                    videoId = track.id,
+                                    offlineFilePath = track.localFilePath
+                                )
+                            },
                             leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) }
                         )
                     }

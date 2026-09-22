@@ -649,6 +649,16 @@ fun MainScreen(
                                 )
                             }
                             
+                            val isAutoplayEnabled by musicViewModel.isAutoplayEnabled.collectAsState()
+
+                            IconButton(onClick = { musicViewModel.setAutoplayEnabled(!isAutoplayEnabled) }) {
+                                Icon(
+                                    Icons.Default.AllInclusive,
+                                    contentDescription = "Infinite Autoplay",
+                                    tint = if (isAutoplayEnabled) MaterialTheme.colorScheme.primary else GrayText
+                                )
+                            }
+                            
                             IconButton(onClick = { musicViewModel.toggleShuffle() }) {
                                 Icon(
                                     Icons.Default.Shuffle,

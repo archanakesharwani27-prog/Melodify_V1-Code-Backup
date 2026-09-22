@@ -178,6 +178,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val _crossfadeDuration = MutableStateFlow(sharedPrefs.getLong("crossfade_duration", 0L))
     val crossfadeDuration: StateFlow<Long> = _crossfadeDuration
 
+    private val _isAutoplayEnabled = MutableStateFlow(sharedPrefs.getBoolean("autoplay_enabled", true))
+    val isAutoplayEnabled: StateFlow<Boolean> = _isAutoplayEnabled.asStateFlow()
+
+    fun setAutoplayEnabled(enabled: Boolean) {
+        _isAutoplayEnabled.value = enabled
+        sharedPrefs.edit().putBoolean("autoplay_enabled", enabled).apply()
+    }
+
     fun setVideoQuality(quality: String) {
         _videoQuality.value = quality
         sharedPrefs.edit().putString("video_quality", quality).apply()
@@ -886,7 +894,20 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }
             playSong(nextTrack.id, nextTrack.title, nextTrack.artist, nextTrack.thumbnailUrl, userTier = userTier)
         } else {
-             controller.seekToNext()
+            // Smart Autoplay / Infinite Radio: If queue reached the end, automatically append related tracks!
+            if (_isAutoplayEnabled.value && _relatedTracks.value.isNotEmpty()) {
+                val currentQIds = queueManager.queue.value.map { it.id }.toSet()
+                val unplayed = _relatedTracks.value.filter { it.id !in currentQIds }
+                if (unplayed.isNotEmpty()) {
+                    queueManager.addTracks(unplayed)
+                    val autoNext = queueManager.getNextTrack()
+                    if (autoNext != null) {
+                        playSong(autoNext.id, autoNext.title, autoNext.artist, autoNext.thumbnailUrl, userTier = userTier)
+                        return
+                    }
+                }
+            }
+            controller.seekToNext()
         }
     }
 

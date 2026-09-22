@@ -94,6 +94,9 @@ class MusicService : MediaSessionService() {
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 initAudioEffects()
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+                    SleepTimerManager.onSongFinished()
+                }
                 if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) {
                     if (crossfadeDurationMs > 0) {
                         fadeIn(crossfadeDurationMs)
@@ -113,6 +116,9 @@ class MusicService : MediaSessionService() {
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) {
+                    SleepTimerManager.onSongFinished()
+                }
                 if (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING) {
                     savePlaybackState()
                 }
@@ -606,5 +612,21 @@ class MusicService : MediaSessionService() {
             player?.pause()
             stopSelf()
         }
+    }
+
+    fun pausePlayback() {
+        if (::exoPlayer.isInitialized) {
+            exoPlayer.pause()
+        }
+    }
+
+    fun setVolume(volume: Float) {
+        if (::exoPlayer.isInitialized) {
+            exoPlayer.volume = volume.coerceIn(0f, 1f)
+        }
+    }
+
+    fun getPlayerVolume(): Float {
+        return if (::exoPlayer.isInitialized) exoPlayer.volume else 1.0f
     }
 }

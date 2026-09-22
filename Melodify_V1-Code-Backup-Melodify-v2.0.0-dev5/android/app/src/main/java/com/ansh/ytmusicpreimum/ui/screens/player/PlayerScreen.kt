@@ -65,6 +65,9 @@ import com.ansh.ytmusicpreimum.AudioEffectsManager
 import com.ansh.ytmusicpreimum.ABLooperManager
 import com.ansh.ytmusicpreimum.HapticBassManager
 import com.ansh.ytmusicpreimum.AmbientSoundscapeManager
+import com.ansh.ytmusicpreimum.SongShareHelper
+import com.ansh.ytmusicpreimum.SleepTimerManager
+import androidx.compose.ui.platform.LocalContext
 import com.ansh.ytmusicpreimum.ui.components.AnimatedIconButton
 import com.ansh.ytmusicpreimum.ui.components.FuturisticThumbnail
 import com.ansh.ytmusicpreimum.ui.components.HeartBeatButton
@@ -275,7 +278,17 @@ fun PlayerPortrait(
 
     var showQualityDialog by remember { mutableStateOf(false) }
     var showEffectsDialog by remember { mutableStateOf(false) }
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var lyricToShare by remember { mutableStateOf<String?>(null) }
     var activeTab by remember { mutableStateOf<String?>(null) } // null: Artwork/Video, "lyrics": Synced Lyrics, "visualizer": Beat Spectrum, "related": Similar Tracks
+
+    val context = LocalContext.current
+    val isSleepTimerActive by SleepTimerManager.isActive.collectAsState()
+    var ambientColors by remember { mutableStateOf(AlbumGlowExtractor.defaultColors()) }
+
+    LaunchedEffect(currentArtwork) {
+        ambientColors = AlbumGlowExtractor.extractColors(context, currentArtwork)
+    }
 
     LaunchedEffect(mediaItem) {
         delay(250)
@@ -320,15 +333,30 @@ fun PlayerPortrait(
             contentScale = ContentScale.Crop,
             alpha = 0.5f
         )
+
+        // --- DYNAMIC AMBIENT GLOW (Apple Music style) ---
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        ambientColors.first.copy(alpha = 0.40f),
+                        ambientColors.second.copy(alpha = 0.18f),
+                        Color.Transparent
+                    ),
+                    center = androidx.compose.ui.geometry.Offset(size.width * 0.5f, size.height * 0.32f),
+                    radius = size.width * 0.88f
+                )
+            )
+        }
         
         Box(modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color.Black.copy(alpha = 0.3f),
-                        Color.Black.copy(alpha = 0.5f),
-                        Color.Black.copy(alpha = 0.9f),
+                        Color.Black.copy(alpha = 0.25f),
+                        Color.Black.copy(alpha = 0.45f),
+                        Color.Black.copy(alpha = 0.88f),
                         Color.Black
                     )
                 )
@@ -509,12 +537,59 @@ fun PlayerPortrait(
                             leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, tint = Color.White) }
                         )
                         DropdownMenuItem(
+                            text = { Text("Share Song", color = Color.White) },
+                            onClick = { 
+                                showMenu = false
+                                SongShareHelper.shareTrack(
+                                    context = context,
+                                    title = currentTitle,
+                                    artist = currentArtist,
+                                    videoId = mediaItem.mediaId,
+                                    offlineFilePath = if (isOfflineTrack) mediaItem.localConfiguration?.uri?.path else null
+                                )
+                            },
+                            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = Color.White) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Sleep Timer", color = Color.White) },
+                            onClick = { 
+                                showMenu = false
+                                showSleepTimerDialog = true
+                            },
+                            leadingIcon = { Icon(Icons.Default.Timer, contentDescription = null, tint = Color(0xFFA78BFA)) }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Settings", color = Color.White) },
                             onClick = { 
                                 showMenu = false
                                 onOpenSettings()
                             },
                             leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White) }
+                        )
+                    }
+                }
+            }
+
+            // Live Sleep Timer Indicator Pill
+            if (isSleepTimerActive) {
+                Surface(
+                    onClick = { showSleepTimerDialog = true },
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF8B5CF6).copy(alpha = 0.22f),
+                    border = BorderStroke(1.dp, Color(0xFF8B5CF6).copy(alpha = 0.5f)),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Timer, contentDescription = null, tint = Color(0xFFC4B5FD), modifier = Modifier.size(13.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            "Sleep Timer: ${SleepTimerManager.formatRemainingTime()}",
+                            color = Color(0xFFC4B5FD),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -550,7 +625,8 @@ fun PlayerPortrait(
                                 lyrics = lyrics,
                                 currentPosition = currentPosition,
                                 contentColor = contentColor,
-                                onSeekToLine = onSeek
+                                onSeekToLine = onSeek,
+                                onShareLyricLine = { lyricToShare = it }
                             )
                         }
                         "visualizer" -> {
@@ -687,11 +763,31 @@ fun PlayerPortrait(
                     )
                 }
                 
-                HeartBeatButton(
-                    isLiked = isLiked,
-                    onClick = onToggleLike,
-                    tint = contentColor
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = {
+                            SongShareHelper.shareTrack(
+                                context = context,
+                                title = currentTitle,
+                                artist = currentArtist,
+                                videoId = mediaItem.mediaId,
+                                offlineFilePath = if (isOfflineTrack) mediaItem.localConfiguration?.uri?.path else null
+                            )
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = "Share Song",
+                            tint = contentColor.copy(alpha = 0.85f),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    HeartBeatButton(
+                        isLiked = isLiked,
+                        onClick = onToggleLike,
+                        tint = contentColor
+                    )
+                }
             }
 
             // --- DISCOVERY ACTION PILLS (Lyrics / Similar Tracks / Artwork) ---
@@ -954,8 +1050,22 @@ fun PlayerPortrait(
                     Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "Queue", tint = Color.White, modifier = Modifier.size(28.dp)) 
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
         }
+    }
+
+    if (showSleepTimerDialog) {
+        SleepTimerDialog(onDismiss = { showSleepTimerDialog = false })
+    }
+
+    if (lyricToShare != null) {
+        LyricShareCardDialog(
+            initialLine = lyricToShare!!,
+            allLines = lyrics.lines.map { it.text },
+            songTitle = currentTitle,
+            songArtist = currentArtist,
+            artworkUrl = currentArtwork,
+            onDismiss = { lyricToShare = null }
+        )
     }
 }@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -1005,6 +1115,11 @@ fun PlayerLandscape(
     
     var showQualityDialog by remember { mutableStateOf(false) }
     var showEffectsDialog by remember { mutableStateOf(false) }
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var lyricToShare by remember { mutableStateOf<String?>(null) }
+    val isSleepTimerActive by SleepTimerManager.isActive.collectAsState()
+    val context = LocalContext.current
+    val currentArtwork = remember(mediaItem) { mediaItem.mediaMetadata.artworkUri }
 
     val currentTitle = remember(mediaItem) { 
         val raw = mediaItem.mediaMetadata.title?.toString() ?: "Unknown"
@@ -1392,6 +1507,28 @@ fun PlayerLandscape(
                                     leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, tint = Color.White) }
                                 )
                                 DropdownMenuItem(
+                                    text = { Text("Share Song", color = Color.White) },
+                                    onClick = {
+                                        showMenu = false
+                                        SongShareHelper.shareTrack(
+                                            context = context,
+                                            title = currentTitle,
+                                            artist = currentArtist,
+                                            videoId = mediaItem.mediaId,
+                                            offlineFilePath = if (isOfflineTrack) mediaItem.localConfiguration?.uri?.path else null
+                                        )
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = Color.White) }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Sleep Timer", color = Color.White) },
+                                    onClick = {
+                                        showMenu = false
+                                        showSleepTimerDialog = true
+                                    },
+                                    leadingIcon = { Icon(Icons.Default.Timer, contentDescription = null, tint = Color(0xFFA78BFA)) }
+                                )
+                                DropdownMenuItem(
                                     text = { Text("Settings", color = Color.White) },
                                     onClick = { showMenu = false; onOpenSettings() },
                                     leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White) }
@@ -1403,6 +1540,21 @@ fun PlayerLandscape(
             }
         }
     }
+
+    if (showSleepTimerDialog) {
+        SleepTimerDialog(onDismiss = { showSleepTimerDialog = false })
+    }
+
+    if (lyricToShare != null) {
+        LyricShareCardDialog(
+            initialLine = lyricToShare!!,
+            allLines = lyrics.lines.map { it.text },
+            songTitle = currentTitle,
+            songArtist = currentArtist,
+            artworkUrl = currentArtwork,
+            onDismiss = { lyricToShare = null }
+        )
+    }
 }
 
 @Composable
@@ -1411,7 +1563,8 @@ fun SpotifyLyricsView(
     currentPosition: Long,
     contentColor: Color,
     onSeekToLine: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onShareLyricLine: (String) -> Unit = {}
 ) {
     Surface(
         modifier = modifier
@@ -1447,31 +1600,49 @@ fun SpotifyLyricsView(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(top = 90.dp, bottom = 120.dp, start = 12.dp, end = 12.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(top = 80.dp, bottom = 120.dp, start = 8.dp, end = 8.dp)
                 ) {
                     itemsIndexed(lyrics.lines) { index, line ->
                         val isCurrent = index == activeIndex
                         val isPast = activeIndex >= 0 && index < activeIndex
                         
-                        Text(
-                            text = line.text,
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = if (isCurrent) FontWeight.Black else if (isPast) FontWeight.SemiBold else FontWeight.Normal,
-                                fontSize = if (isCurrent) 22.sp else 17.sp,
-                                lineHeight = if (isCurrent) 30.sp else 24.sp
-                            ),
-                            color = when {
-                                isCurrent -> Color.White
-                                isPast -> Color.White.copy(alpha = 0.65f)
-                                else -> Color.White.copy(alpha = 0.28f)
-                            },
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .clickable { onSeekToLine(line.time) }
-                                .padding(vertical = 4.dp, horizontal = 6.dp)
-                        )
+                                .padding(vertical = 4.dp, horizontal = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = line.text,
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = if (isCurrent) FontWeight.Black else if (isPast) FontWeight.SemiBold else FontWeight.Normal,
+                                    fontSize = if (isCurrent) 22.sp else 17.sp,
+                                    lineHeight = if (isCurrent) 30.sp else 24.sp
+                                ),
+                                color = when {
+                                    isCurrent -> Color.White
+                                    isPast -> Color.White.copy(alpha = 0.65f)
+                                    else -> Color.White.copy(alpha = 0.28f)
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (isCurrent) {
+                                IconButton(
+                                    onClick = { onShareLyricLine(line.text) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Share,
+                                        contentDescription = "Share Lyric Card",
+                                        tint = Color(0xFF1DB954),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             } else if (!lyrics.plainLyrics.isNullOrBlank()) {
@@ -1481,12 +1652,28 @@ fun SpotifyLyricsView(
                         .verticalScroll(rememberScrollState())
                         .padding(vertical = 8.dp)
                 ) {
-                    Text(
-                        text = "LYRICS",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 2.sp),
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "LYRICS",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, letterSpacing = 2.sp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        IconButton(
+                            onClick = { onShareLyricLine(lyrics.plainLyrics.take(280)) },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = "Share Lyric Card",
+                                tint = Color(0xFF1DB954),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
                     Text(
                         text = lyrics.plainLyrics,
                         style = MaterialTheme.typography.bodyLarge.copy(

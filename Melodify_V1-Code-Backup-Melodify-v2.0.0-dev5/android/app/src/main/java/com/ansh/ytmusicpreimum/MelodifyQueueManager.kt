@@ -79,6 +79,16 @@ class MelodifyQueueManager {
         }
     }
 
+    fun addTracks(tracks: List<TrackEntity>) {
+        val currentList = _queue.value.toMutableList()
+        val existingIds = currentList.map { it.id }.toSet()
+        val newTracks = tracks.filter { it.id !in existingIds }
+        if (newTracks.isNotEmpty()) {
+            currentList.addAll(newTracks)
+            _queue.value = currentList
+        }
+    }
+
     fun insertAt(index: Int, track: TrackEntity) {
         val currentList = _queue.value.toMutableList()
         if (index in 0..currentList.size) {
