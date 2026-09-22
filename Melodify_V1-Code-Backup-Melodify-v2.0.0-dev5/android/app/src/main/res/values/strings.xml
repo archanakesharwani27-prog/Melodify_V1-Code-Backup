@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Melodify</string>
     <string name="title_activity_main">Melodify</string>
-    <string name="package_name">com.ansh.ytmusicpreimum</string>
-    <string name="custom_url_scheme">com.ansh.ytmusicpreimum</string>
+    <string name="package_name">com.melodify.melodifyapp</string>
+    <string name="custom_url_scheme">com.melodify.melodifyapp</string>
 </resources>

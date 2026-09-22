@@ -67,6 +67,64 @@ class MelodifyDownloadManager(private val context: Context) {
     init {
         createNotificationChannel()
         registerNetworkCallback()
+        syncDownloadedFiles()
+    }
+
+    fun syncDownloadedFiles() {
+        scope.launch(Dispatchers.IO) {
+            try {
+                val downloadsDir = getDownloadsDir()
+                val files = downloadsDir.listFiles { _, name ->
+                    name.endsWith(".mp3", ignoreCase = true) || name.endsWith(".mp4", ignoreCase = true)
+                } ?: return@launch
+
+                for (file in files) {
+                    val songId = file.nameWithoutExtension
+                    if (songId.isBlank()) continue
+
+                    val existing = trackDao.getTrackById(songId)
+                    if (existing == null) {
+                        var title = songId
+                        var artist = "Downloaded Song"
+                        var duration = 0L
+                        try {
+                            val retriever = android.media.MediaMetadataRetriever()
+                            retriever.setDataSource(file.absolutePath)
+                            val metaTitle = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE)
+                            val metaArtist = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                            val metaDur = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                            if (!metaTitle.isNullOrBlank()) title = metaTitle
+                            if (!metaArtist.isNullOrBlank()) artist = metaArtist
+                            if (!metaDur.isNullOrBlank()) duration = metaDur.toLongOrNull() ?: 0L
+                            retriever.release()
+                        } catch (e: Throwable) {
+                            android.util.Log.w("MelodifyDownload", "Metadata retriever error for ${file.name}", e)
+                        }
+
+                        val recoveredTrack = TrackEntity(
+                            id = songId,
+                            title = title,
+                            artist = artist,
+                            album = "Downloaded",
+                            isDownloaded = true,
+                            localFilePath = file.absolutePath,
+                            addedDate = file.lastModified()
+                        )
+                        trackDao.insertTrack(recoveredTrack)
+                        android.util.Log.i("MelodifyDownload", "Auto-recovered offline download: $songId ($title)")
+                    } else if (!existing.isDownloaded || existing.localFilePath != file.absolutePath) {
+                        val updated = existing.copy(
+                            isDownloaded = true,
+                            localFilePath = file.absolutePath
+                        )
+                        trackDao.insertTrack(updated)
+                        android.util.Log.i("MelodifyDownload", "Updated download path in DB: $songId")
+                    }
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("MelodifyDownload", "Error syncing downloaded files", e)
+            }
+        }
     }
 
     private fun registerNetworkCallback() {

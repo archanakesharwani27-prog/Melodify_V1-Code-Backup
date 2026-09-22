@@ -324,7 +324,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private val skipReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
+                "${context?.packageName}.ACTION_SKIP_NEXT",
+                "com.melodify.melodifyapp.ACTION_SKIP_NEXT",
                 "com.ansh.ytmusicpreimum.ACTION_SKIP_NEXT" -> skipNext(userTier)
+                "${context?.packageName}.ACTION_SKIP_PREV",
+                "com.melodify.melodifyapp.ACTION_SKIP_PREV",
                 "com.ansh.ytmusicpreimum.ACTION_SKIP_PREV" -> skipPrevious(userTier)
             }
         }
@@ -335,7 +339,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         startProgressUpdate()
         
         try {
+            val pkg = getApplication<Application>().packageName
             val filter = android.content.IntentFilter().apply {
+                addAction("${pkg}.ACTION_SKIP_NEXT")
+                addAction("${pkg}.ACTION_SKIP_PREV")
+                addAction("com.melodify.melodifyapp.ACTION_SKIP_NEXT")
+                addAction("com.melodify.melodifyapp.ACTION_SKIP_PREV")
                 addAction("com.ansh.ytmusicpreimum.ACTION_SKIP_NEXT")
                 addAction("com.ansh.ytmusicpreimum.ACTION_SKIP_PREV")
             }

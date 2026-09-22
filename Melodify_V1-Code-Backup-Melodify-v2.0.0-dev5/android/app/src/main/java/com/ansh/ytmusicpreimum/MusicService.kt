@@ -6,6 +6,11 @@ import android.os.PowerManager
 import android.net.wifi.WifiManager
 import kotlinx.coroutines.*
 import android.os.Bundle
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -293,7 +298,7 @@ class MusicService : MediaSessionService() {
                 if (super.hasNextMediaItem()) {
                     super.seekToNext()
                 } else {
-                    val intent = Intent("com.ansh.ytmusicpreimum.ACTION_SKIP_NEXT")
+                    val intent = Intent("${packageName}.ACTION_SKIP_NEXT")
                     intent.setPackage(packageName)
                     sendBroadcast(intent)
                 }
@@ -303,16 +308,52 @@ class MusicService : MediaSessionService() {
                 if (super.hasPreviousMediaItem()) {
                     super.seekToPrevious()
                 } else {
-                    val intent = Intent("com.ansh.ytmusicpreimum.ACTION_SKIP_PREV")
+                    val intent = Intent("${packageName}.ACTION_SKIP_PREV")
                     intent.setPackage(packageName)
                     sendBroadcast(intent)
                 }
             }
         }
 
+        val channelId = "melodify_playback_channel"
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val existingChannel = notificationManager.getNotificationChannel(channelId)
+            if (existingChannel == null) {
+                val channel = NotificationChannel(
+                    channelId,
+                    "Melodify Music Playback",
+                    NotificationManager.IMPORTANCE_LOW
+                ).apply {
+                    description = "Media playback controls and status"
+                    setShowBadge(false)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+        }
+
+        val sessionActivityPendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java).apply {
+                action = Intent.ACTION_MAIN
+                addCategory(Intent.CATEGORY_LAUNCHER)
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         mediaSession = MediaSession.Builder(this, forwardingPlayer)
             .setCallback(callback)
+            .setSessionActivity(sessionActivityPendingIntent)
             .build()
+
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this)
+                .setChannelId(channelId)
+                .build()
+        )
     }
 
     private fun savePlaybackState() {

@@ -5,6 +5,9 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -333,7 +336,8 @@ fun PlayerPortrait(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .padding(horizontal = (screenWidth.value * 0.08f).dp), 
+                .padding(horizontal = (screenWidth.value * 0.08f).dp)
+                .padding(bottom = 16.dp), 
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             
@@ -511,10 +515,19 @@ fun PlayerPortrait(
                 }
             }
             
-            Spacer(modifier = Modifier.weight(0.1f))
+            Spacer(modifier = Modifier.weight(0.08f, fill = false))
             
             // --- CENTER DISPLAY (Artwork / Video / Synced Lyrics / Similar Tracks) ---
-            val displayHeight = minOf(screenWidth * 0.88f, screenHeight * 0.42f)
+            val targetDisplayHeight = if (activeTab != null) {
+                minOf(screenWidth * 0.70f, screenHeight * 0.28f)
+            } else {
+                minOf(screenWidth * 0.82f, screenHeight * 0.38f)
+            }
+            val displayHeight by animateDpAsState(
+                targetValue = targetDisplayHeight,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                label = "DisplayHeightAnim"
+            )
             
             Box(modifier = Modifier
                 .fillMaxWidth()
@@ -632,7 +645,7 @@ fun PlayerPortrait(
                 }
             }
             
-            Spacer(modifier = Modifier.weight(0.15f))
+            Spacer(modifier = Modifier.weight(0.08f, fill = false))
             
             // --- SONG INFO ---
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -852,7 +865,7 @@ fun PlayerPortrait(
                 }
             }
             
-            Spacer(modifier = Modifier.weight(0.1f))
+            Spacer(modifier = Modifier.weight(0.08f, fill = false))
             
             // --- CONTROLS ---
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -884,7 +897,7 @@ fun PlayerPortrait(
                 }
             }
             
-            Spacer(modifier = Modifier.weight(0.2f))
+            Spacer(modifier = Modifier.heightIn(min = 6.dp).weight(0.12f, fill = false))
             
             // --- VOLUME & QUEUE ---
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -902,7 +915,7 @@ fun PlayerPortrait(
                     Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = "Queue", tint = Color.White, modifier = Modifier.size(28.dp)) 
                 }
             }
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
