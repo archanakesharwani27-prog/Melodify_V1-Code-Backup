@@ -81,29 +81,15 @@ class MusicService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
+        initAudioEffects(exoPlayer.audioSessionId)
+
         exoPlayer.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                if (audioSessionId != C.AUDIO_SESSION_ID_UNSET && audioSessionId != 0) {
-                    initVisualizer(audioSessionId)
-                    AudioEffectsManager.init(applicationContext, audioSessionId)
-                    
-                    // Notify system about our audio session
-                    try {
-                        val intent = Intent(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
-                            putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, audioSessionId)
-                            putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
-                            putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE, android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC)
-                        }
-                        sendBroadcast(intent)
-                    } catch (t: Throwable) {
-                        android.util.Log.w("MusicService", "Failed to broadcast audio effect session", t)
-                    }
-                } else {
-                    android.util.Log.w("MusicDiagnostics", "onAudioSessionIdChanged: Invalid session ID $audioSessionId")
-                }
+                initAudioEffects(audioSessionId)
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                initAudioEffects()
                 if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED || reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK) {
                     if (crossfadeDurationMs > 0) {
                         fadeIn(crossfadeDurationMs)
@@ -126,10 +112,16 @@ class MusicService : MediaSessionService() {
                 if (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING) {
                     savePlaybackState()
                 }
+                if (playbackState == Player.STATE_READY) {
+                    initAudioEffects()
+                }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 updateLocks(isPlaying)
+                if (isPlaying) {
+                    initAudioEffects()
+                }
                 try {
                     if (audioVisualizer == null && isPlaying) {
                         initVisualizer(exoPlayer.audioSessionId)
@@ -369,6 +361,35 @@ class MusicService : MediaSessionService() {
             putString("last_artist", currentItem.mediaMetadata.artist?.toString())
             putString("last_artwork", currentItem.mediaMetadata.artworkUri?.toString())
             apply()
+        }
+    }
+
+    fun initAudioEffects(audioSessionId: Int = 0) {
+        val targetSession = if (audioSessionId != C.AUDIO_SESSION_ID_UNSET && audioSessionId != 0) {
+            audioSessionId
+        } else if (::exoPlayer.isInitialized && exoPlayer.audioSessionId != C.AUDIO_SESSION_ID_UNSET && exoPlayer.audioSessionId != 0) {
+            exoPlayer.audioSessionId
+        } else {
+            0
+        }
+
+        try {
+            AudioEffectsManager.init(applicationContext, targetSession)
+            if (targetSession != 0) {
+                initVisualizer(targetSession)
+                try {
+                    val intent = Intent(android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION).apply {
+                        putExtra(android.media.audiofx.AudioEffect.EXTRA_AUDIO_SESSION, targetSession)
+                        putExtra(android.media.audiofx.AudioEffect.EXTRA_PACKAGE_NAME, packageName)
+                        putExtra(android.media.audiofx.AudioEffect.EXTRA_CONTENT_TYPE, android.media.audiofx.AudioEffect.CONTENT_TYPE_MUSIC)
+                    }
+                    sendBroadcast(intent)
+                } catch (t: Throwable) {
+                    android.util.Log.w("MusicService", "Failed to broadcast audio effect session", t)
+                }
+            }
+        } catch (t: Throwable) {
+            android.util.Log.e("MusicService", "Failed to init AudioEffectsManager", t)
         }
     }
 

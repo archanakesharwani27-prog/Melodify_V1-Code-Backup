@@ -26,10 +26,12 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
@@ -1651,27 +1653,67 @@ fun LyricsScreen(lyrics: String?, isFetching: Boolean, contentColor: Color) {
 fun AudioEffectsDialog(
     onDismiss: () -> Unit
 ) {
-    val currentPreset by AudioEffectsManager.currentPreset.collectAsState()
-    val presets = AudioEffectsManager.AVAILABLE_PRESETS
+    val context = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) {
+        AudioEffectsManager.init(context, 0)
+    }
 
-    val presetDescriptions = mapOf(
-        "Flat" to "Standard natural studio sound profile",
-        "Pop" to "Crisp vocal clarity with vibrant upper mids",
-        "Rock" to "Punchy bass with aggressive highs & tight kick",
-        "DJ / Dance" to "Club curve, heavy beat pump & fast dynamics",
-        "Bass Boost" to "Rich, deep warm bass frequency amplification",
-        "Deep Bass" to "Subwoofer focus: 60Hz max gain + hardware BassBoost 950",
-        "3D Surrounding Sound" to "Ultra-wide 3D spatial field (Virtualizer 1000)",
-        "Dolby Atmos / Studio" to "Professional master: Wide soundstage + +3.5dB Dynamic Gain"
-    )
+    val isEnabled by AudioEffectsManager.isEnabled.collectAsState()
+    val currentPreset by AudioEffectsManager.currentPreset.collectAsState()
+    val bandFreqs by AudioEffectsManager.bandCenterFreqs.collectAsState()
+    val bandLevels by AudioEffectsManager.bandLevels.collectAsState()
+    val bassBoostStrength by AudioEffectsManager.bassBoostStrength.collectAsState()
+    val virtualizerStrength by AudioEffectsManager.virtualizerStrength.collectAsState()
+    val loudnessGain by AudioEffectsManager.loudnessGain.collectAsState()
+
+    val presets = AudioEffectsManager.AVAILABLE_PRESETS
+    val minLevel = AudioEffectsManager.minBandLevel
+    val maxLevel = AudioEffectsManager.maxBandLevel
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier
+            .fillMaxWidth(0.94f)
+            .wrapContentHeight(),
         title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                Spacer(modifier = Modifier.width(10.dp))
-                Text("Sound Effects & Equalizer", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.GraphicEq,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = "Equalizer & Audio FX",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = Color.White
+                        )
+                        Text(
+                            text = if (isEnabled) "DSP Engine Active" else "DSP Engine Bypassed",
+                            fontSize = 11.sp,
+                            color = if (isEnabled) Color(0xFF4CAF50) else Color.White.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+                Switch(
+                    checked = isEnabled,
+                    onCheckedChange = { AudioEffectsManager.setEnabled(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                        uncheckedThumbColor = Color.LightGray,
+                        uncheckedTrackColor = Color.DarkGray
+                    )
+                )
             }
         },
         text = {
@@ -1679,59 +1721,387 @@ fun AudioEffectsDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                presets.forEach { preset ->
-                    val isSelected = preset == currentPreset
-                    Surface(
-                        onClick = {
-                            AudioEffectsManager.applyPreset(preset)
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f),
-                        border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary) else androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = isSelected,
-                                onClick = null,
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = MaterialTheme.colorScheme.primary
-                                )
+                // Presets Horizontal Row
+                Text(
+                    text = "PRESETS",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.5f),
+                    letterSpacing = 1.sp
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    presets.forEach { preset ->
+                        val isSelected = preset == currentPreset
+                        Surface(
+                            onClick = { AudioEffectsManager.applyPreset(preset) },
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.07f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isSelected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.12f)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        Icons.Default.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(13.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
                                 Text(
                                     text = preset,
+                                    fontSize = 12.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    fontSize = 15.sp,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.White
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.White
                                 )
-                                presetDescriptions[preset]?.let { desc ->
-                                    Text(
-                                        text = desc,
-                                        fontSize = 11.sp,
-                                        color = Color.White.copy(alpha = 0.6f)
-                                    )
-                                }
                             }
                         }
                     }
                 }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 1.dp)
+
+                // 5-Band Equalizer Section
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "5-BAND EQUALIZER",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.5f),
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = "±15 dB",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White.copy(alpha = 0.4f)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val defaultLabels = listOf("60Hz", "230Hz", "910Hz", "3.6kHz", "14kHz")
+                    val bandCount = bandFreqs.size.coerceAtLeast(5)
+
+                    for (i in 0 until bandCount) {
+                        val freqLabel = if (i < bandFreqs.size) {
+                            val f = bandFreqs[i]
+                            if (f >= 1000) {
+                                val kHz = f / 1000f
+                                if (kHz % 1f == 0f) "${kHz.toInt()}kHz" else "${String.format(java.util.Locale.US, "%.1f", kHz)}kHz"
+                            } else {
+                                "${f}Hz"
+                            }
+                        } else {
+                            defaultLabels.getOrElse(i) { "Band $i" }
+                        }
+                        val level = if (i < bandLevels.size) bandLevels[i] else 0
+
+                        VerticalBandFader(
+                            freqLabel = freqLabel,
+                            levelMilliBels = level,
+                            minLevel = minLevel,
+                            maxLevel = maxLevel,
+                            enabled = isEnabled,
+                            onLevelChange = { newLevel ->
+                                AudioEffectsManager.setBandLevel(i, newLevel)
+                            }
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f), thickness = 1.dp)
+
+                // DSP Enhancements
+                Text(
+                    text = "HARDWARE DSP ENHANCERS",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.5f),
+                    letterSpacing = 1.sp
+                )
+
+                // Bass Boost
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.GraphicEq,
+                                contentDescription = null,
+                                tint = Color(0xFFFF5252),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Bass Boost",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = Color.White
+                            )
+                        }
+                        Text(
+                            text = "${(bassBoostStrength / 10f).toInt()}%",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFF5252)
+                        )
+                    }
+                    Slider(
+                        value = bassBoostStrength.toFloat(),
+                        onValueChange = { AudioEffectsManager.setBassBoost(it.toInt()) },
+                        valueRange = 0f..1000f,
+                        enabled = isEnabled,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFFFF5252),
+                            activeTrackColor = Color(0xFFFF5252),
+                            inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                        )
+                    )
+                }
+
+                // 3D Spatial Virtualizer
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.Headphones,
+                                contentDescription = null,
+                                tint = Color(0xFF00E5FF),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "3D Spatial Virtualizer",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = Color.White
+                            )
+                        }
+                        Text(
+                            text = "${(virtualizerStrength / 10f).toInt()}%",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF00E5FF)
+                        )
+                    }
+                    Slider(
+                        value = virtualizerStrength.toFloat(),
+                        onValueChange = { AudioEffectsManager.setVirtualizer(it.toInt()) },
+                        valueRange = 0f..1000f,
+                        enabled = isEnabled,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFF00E5FF),
+                            activeTrackColor = Color(0xFF00E5FF),
+                            inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                        )
+                    )
+                }
+
+                // Loudness Preamp Gain
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Default.VolumeUp,
+                                contentDescription = null,
+                                tint = Color(0xFFFFB300),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Loudness Preamp (Studio Boost)",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp,
+                                color = Color.White
+                            )
+                        }
+                        val gainDb = loudnessGain / 100f
+                        Text(
+                            text = if (gainDb > 0) "+${String.format(java.util.Locale.US, "%.1f", gainDb)} dB" else "0.0 dB",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFFB300)
+                        )
+                    }
+                    Slider(
+                        value = loudnessGain.toFloat(),
+                        onValueChange = { AudioEffectsManager.setLoudness(it.toInt()) },
+                        valueRange = 0f..800f,
+                        enabled = isEnabled,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFFFFB300),
+                            activeTrackColor = Color(0xFFFFB300),
+                            inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                        )
+                    )
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Done", color = MaterialTheme.colorScheme.primary)
+            Button(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Done")
             }
         },
-        containerColor = Color(0xFF1E1E28),
-        shape = RoundedCornerShape(20.dp)
+        dismissButton = {
+            OutlinedButton(
+                onClick = { AudioEffectsManager.resetToFlat() },
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Reset Flat")
+            }
+        },
+        containerColor = Color(0xFF181822),
+        shape = RoundedCornerShape(24.dp)
     )
+}
+
+@Composable
+fun VerticalBandFader(
+    freqLabel: String,
+    levelMilliBels: Int,
+    minLevel: Int,
+    maxLevel: Int,
+    enabled: Boolean,
+    onLevelChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val db = (levelMilliBels / 100)
+    val dbText = if (db > 0) "+${db}dB" else "${db}dB"
+    val range = (maxLevel - minLevel).coerceAtLeast(1)
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+    ) {
+        Text(
+            text = dbText,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (!enabled) Color.Gray else if (db > 0) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.7f)
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Box(
+            modifier = Modifier
+                .width(36.dp)
+                .height(130.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color.White.copy(alpha = if (enabled) 0.08f else 0.03f))
+                .pointerInput(enabled, minLevel, maxLevel) {
+                    if (!enabled) return@pointerInput
+                    detectTapGestures { offset ->
+                        val fraction = 1f - (offset.y / size.height).coerceIn(0f, 1f)
+                        val newLevel = (minLevel + fraction * range).toInt()
+                        onLevelChange(newLevel)
+                    }
+                }
+                .pointerInput(enabled, minLevel, maxLevel) {
+                    if (!enabled) return@pointerInput
+                    detectVerticalDragGestures { change, _ ->
+                        change.consume()
+                        val fraction = 1f - (change.position.y / size.height).coerceIn(0f, 1f)
+                        val newLevel = (minLevel + fraction * range).toInt()
+                        onLevelChange(newLevel)
+                    }
+                },
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            val fillFraction = ((levelMilliBels - minLevel).toFloat() / range).coerceIn(0f, 1f)
+            // Fill gradient
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(fillFraction)
+                    .background(
+                        Brush.verticalGradient(
+                            if (enabled) listOf(
+                                MaterialTheme.colorScheme.primary,
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                            ) else listOf(
+                                Color.Gray.copy(alpha = 0.4f),
+                                Color.Gray.copy(alpha = 0.1f)
+                            )
+                        )
+                    )
+            )
+            // Center 0 dB guide line
+            val zeroFraction = ((0 - minLevel).toFloat() / range).coerceIn(0f, 1f)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(zeroFraction),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(Color.White.copy(alpha = 0.25f))
+                )
+            }
+            // Thumb slider handle
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(fillFraction)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .size(width = 28.dp, height = 7.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(if (enabled) Color.White else Color.Gray)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = freqLabel,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (enabled) Color.White.copy(alpha = 0.9f) else Color.Gray
+        )
+    }
 }
