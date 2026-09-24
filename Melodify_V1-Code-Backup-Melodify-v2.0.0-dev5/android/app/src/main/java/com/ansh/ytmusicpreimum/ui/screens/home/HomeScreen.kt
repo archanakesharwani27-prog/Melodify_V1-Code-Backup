@@ -552,9 +552,9 @@ fun SongCard(track: TrackEntity, onClick: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = track.title, 
-            color = GeminiTextPrimary, 
+            color = MaterialTheme.colorScheme.onBackground, 
             style = MaterialTheme.typography.titleSmall.copy(
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Bold,
                 fontSize = 14.sp
             ),
             maxLines = 1, 
@@ -563,8 +563,11 @@ fun SongCard(track: TrackEntity, onClick: () -> Unit) {
         )
         Text(
             text = track.artist, 
-            color = GeminiTextSecondary, 
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant, 
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp
+            ),
             maxLines = 1, 
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp)

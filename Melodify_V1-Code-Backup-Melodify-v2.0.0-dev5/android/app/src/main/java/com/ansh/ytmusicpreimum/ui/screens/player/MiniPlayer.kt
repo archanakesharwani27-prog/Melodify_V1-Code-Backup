@@ -80,9 +80,9 @@ fun MiniPlayer(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = displayTitle,
-                        color = GeminiTextPrimary,
+                        color = Color.White,
                         style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         ),
                         maxLines = 1,
@@ -91,8 +91,11 @@ fun MiniPlayer(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = displayArtist,
-                        color = GeminiTextSecondary,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 12.sp
+                        ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

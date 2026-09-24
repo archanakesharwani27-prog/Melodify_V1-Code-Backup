@@ -108,18 +108,21 @@ fun TrackItem(
                 Text(
                     text = track.title,
                     style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
                         fontSize = 15.sp
                     ),
-                    color = if (isCurrent) GeminiBlue else GeminiTextPrimary,
+                    color = if (isCurrent) GeminiBlue else MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = track.artist,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                    color = GeminiTextSecondary,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 12.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
