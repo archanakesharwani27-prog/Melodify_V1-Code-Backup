@@ -73,7 +73,7 @@ fun SectionTitle(title: String, icon: ImageVector, onViewAll: (() -> Unit)? = nu
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp
             ), 
-            color = com.ansh.ytmusicpreimum.ui.theme.GeminiTextPrimary,
+            color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.weight(1f)
         )
         if (onViewAll != null) {

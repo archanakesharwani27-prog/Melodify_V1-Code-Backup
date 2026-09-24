@@ -48,7 +48,7 @@ fun PrivacyPolicyScreen(onBack: () -> Unit) {
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                "Last Updated: June 26, 2026\nApp Version: v1.0.0\nDeveloper: Ansh Kesharwani",
+                "Last Updated: September 24, 2026\nApp Version: Melodify v2.0.0\nDeveloper: Ansh Kesharwani",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 8.dp)
@@ -56,45 +56,59 @@ fun PrivacyPolicyScreen(onBack: () -> Unit) {
 
             SectionTitle("Introduction")
             Text(
-                "Welcome to Melodify (\"we,\" \"our,\" or \"us\"). We are committed to protecting your privacy. This Privacy Policy explains how we handle your information when you use our mobile application Melodify (the \"App\")."
+                "Welcome to Melodify (\"we,\" \"our,\" or \"us\"). We are committed to protecting your personal privacy. This Privacy Policy details how Melodify (the \"App\") handles user information, authentication, cloud sync, local caching, and media streaming in compliance with Samsung Galaxy Store and Google Play Store policies."
             )
 
-            SectionTitle("1. Information We Collect and How We Use It")
+            SectionTitle("1. Information We Collect and Cloud Synchronization")
             Text(
-                "Melodify is designed to be a secure, user-centric offline and online audio player. We prioritize data minimization, meaning we do not collect your personal data unless strictly necessary for core app functionalities."
+                "Melodify is built with a data-minimization approach. We do not sell, rent, or monetize your personal information."
             )
-            
-            BulletPoint("Audio and Media Files", "The App requires access to your device's storage (READ_EXTERNAL_STORAGE / READ_MEDIA_AUDIO) to scan, index, and play local audio tracks. This data remains strictly on your device and is never uploaded to external servers.")
-            BulletPoint("Device Permissions (Haptic Feedback)", "The App uses the device's vibrator subsystem to provide haptic feedback micro-interactions during playback controls (play, pause, next, previous).")
-            BulletPoint("Crash Reporting and Performance Data", "To ensure stability across app updates (including v1.0.0 features), anonymous technical logs, device model info, and crash traces may be processed to fix bugs.")
+            BulletPoint("Google Account & Profile Data", "When you choose 'Continue with Google', we receive standard authentication tokens (Display Name, Email Address, and Avatar URL) through official Google Identity & Firebase Auth. This is used solely to personalize your experience and secure your account.")
+            BulletPoint("Cloud Sync Service", "If signed in, your user-created playlists, favorite/liked tracks, and listening history are securely synchronized with Firebase Firestore under your unique User ID. This allows you to seamlessly restore your music library across device re-installations or phone upgrades.")
+            BulletPoint("Local Audio & Storage", "Melodify accesses device storage (READ_MEDIA_AUDIO) solely to discover, index, and play your locally stored music tracks. Your local audio files never leave your device and are never uploaded to external servers.")
+            BulletPoint("Offline Downloads", "Songs and media downloaded for offline listening are stored in your device's private app directory. They are removed upon app uninstallation.")
 
-            SectionTitle("2. Permissions Utilized")
-            Text("To deliver the full multimedia experience, including our unique 3D book-page flip views, gestures, and audio features, Melodify utilizes the following system permissions:")
-            
-            PermissionRow("Storage / Media Audio", "To fetch local audio tracks, album arts, and metadata for offline playback.")
-            PermissionRow("Internet Access", "To stream online music playlists and load dynamic visual content.")
-            PermissionRow("Vibrate / Haptic Control", "To deliver tactile responses upon double/triple tap gesture registrations.")
+            SectionTitle("2. Media Streaming & Third-Party Services")
+            Text(
+                "Melodify acts as an advanced audio engine and media player. Online streaming data is fetched through public, decentralized API endpoints. Melodify does not host copyrighted media files on private proprietary servers. Third-party SDKs (such as Google Play Services and Firebase) may process anonymous technical telemetry to deliver crash reports and maintain system stability."
+            )
 
-            SectionTitle("3. Third-Party Services")
-            Text("We do not sell, trade, or rent your personal information to third parties. If the app uses standard platform services (like Google Play Services) for core app delivery, these services may collect information used to identify your device in accordance with their respective privacy frameworks.")
+            SectionTitle("3. App Permissions Explained")
+            PermissionRow("Internet Access", "Required to stream music, fetch album artwork, retrieve lyrics, and sync cloud playlists.")
+            PermissionRow("Storage / Media Audio", "Required to access and play local audio files on your device.")
+            PermissionRow("Haptic Feedback & Vibrate", "Provides tactile feedback for gesture controls and playback buttons.")
+            PermissionRow("Foreground Service & Media Playback", "Allows uninterrupted background playback and Lockscreen media controls.")
 
-            SectionTitle("4. Data Security")
-            Text("The security of your data is highly important to us. Melodify implements standard security practices to protect local databases and resource routing. No method of transmission over the internet or electronic storage is 100% secure, but we strive to use commercially acceptable means to protect it.")
+            SectionTitle("4. Data Security & User Control")
+            Text(
+                "We implement industry-standard encryption practices to protect account tokens and cloud sync endpoints. You retain full control over your data:"
+            )
+            BulletPoint("Clear Cache", "You can clear local cache, downloaded artwork, and temporary audio files anytime from Settings.")
+            BulletPoint("Account Sign-Out", "Signing out immediately disconnects Google Cloud synchronization on the device.")
+            BulletPoint("Data Deletion", "To permanently delete your synced cloud library and profile data, you can email the developer or disconnect the app from your Google Account permissions.")
 
             SectionTitle("5. Children's Privacy")
-            Text("Melodify does not address anyone under the age of 13. We do not knowingly collect personally identifiable information from children under 13. If we discover that a child under 13 has provided us with personal information, we immediately delete this from our logs.")
-
-            SectionTitle("6. Changes to This Privacy Policy")
-            Text("We may update our Privacy Policy from time to time to reflect changes in app iterations or legislative requirements. We advise you to review this page periodically for any changes.")
-
-            SectionTitle("7. Contact Us")
-            Text("If you have any questions, feedback, or suggestions about Melodify's privacy practices, do not hesitate to contact the developer:")
             Text(
-                "Developer Name: Ansh Kesharwani\nEmail: anshkesharwani0807@gmail.com",
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(top = 8.dp)
+                "Melodify does not knowingly collect personally identifiable information from children under the age of 13. If you believe a child has provided us personal data, contact us immediately and we will delete it promptly."
             )
-            
+
+            SectionTitle("6. Policy Revisions")
+            Text(
+                "We may update this Privacy Policy from time to time to accommodate new features or regulatory requirements. Continued use of Melodify following updates signifies your acceptance."
+            )
+
+            SectionTitle("7. Contact & Developer Information")
+            Text(
+                "For any privacy queries, feedback, or data requests, please contact:",
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+            Text(
+                "Developer: Ansh Kesharwani\nEmail: anshkesharwani0807@gmail.com\nProject: Melodify Music Player",
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }

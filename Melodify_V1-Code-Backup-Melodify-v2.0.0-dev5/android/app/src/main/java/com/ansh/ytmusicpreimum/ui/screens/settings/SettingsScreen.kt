@@ -425,6 +425,26 @@ fun SettingsScreen(
                 HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 16.dp))
 
                 EnhancedSettingsRow(
+                    title = "Check for Updates",
+                    subtitle = "Search for new releases and features (v2.0.0)",
+                    icon = Icons.Default.SystemUpdate,
+                    iconColor = Color(0xFF4CAF50),
+                    isDarkTheme = isDarkTheme,
+                    onClick = {
+                        coroutineScope.launch {
+                            val info = com.ansh.ytmusicpreimum.InAppUpdateManager.checkLatestRelease()
+                            if (info.isUpdateAvailable) {
+                                Toast.makeText(context, "New Update Available: v${info.latestVersionName}", Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(context, "Melodify is up to date (v2.0.0)", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                )
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 16.dp))
+
+                EnhancedSettingsRow(
                     title = "Feedback & Feature Request",
                     subtitle = "Help make Melodify even better",
                     icon = Icons.Default.Feedback,

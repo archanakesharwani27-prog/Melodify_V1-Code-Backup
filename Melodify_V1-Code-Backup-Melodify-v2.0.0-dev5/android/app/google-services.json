@@ -1,49 +1,91 @@
 {
   "project_info": {
-    "project_number": "854004439119",
-    "project_id": "melodify-d339b",
-    "storage_bucket": "melodify-d339b.firebasestorage.app"
+    "project_number": "111984323181",
+    "project_id": "ytmusicpremium-70476",
+    "storage_bucket": "ytmusicpremium-70476.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:854004439119:android:26e4a95cb0bf6029edf23a",
+        "mobilesdk_app_id": "1:111984323181:android:37e6891d8fbaf4c333ed64",
         "android_client_info": {
-          "package_name": "com.melodify.melodifyapp"
+          "package_name": "com.ansh.app"
         }
       },
       "oauth_client": [
         {
-          "client_id": "854004439119-qpuckh8bog6kb3rgfuv04gk0ij1564pf.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.melodify.melodifyapp",
-            "certificate_hash": "78bdc95f5be94a3c3459947f39af218983ab9ca8"
-          }
-        },
-        {
-          "client_id": "854004439119-localdebugkeystore.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.melodify.melodifyapp",
-            "certificate_hash": "28c8170388875492b7f700ddd198bde94959a0a0"
-          }
-        },
-        {
-          "client_id": "854004439119-vtfd5l5rfet0rviabr9uqe3d4rbgucj1.apps.googleusercontent.com",
+          "client_id": "111984323181-av69kq2f712sonk9v6vitiemqs0flgt4.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyCOeSBve1N7kU9Kw89kg6nMtyyWz7DpcwM"
+          "current_key": "AIzaSyD9GPWiNQcSAdxU3fD_Wd0zcyAVYo3FZrg"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "854004439119-vtfd5l5rfet0rviabr9uqe3d4rbgucj1.apps.googleusercontent.com",
+              "client_id": "111984323181-av69kq2f712sonk9v6vitiemqs0flgt4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:111984323181:android:212bbf73e2a8598333ed64",
+        "android_client_info": {
+          "package_name": "com.ansh.ytmusicpreimum"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "111984323181-av69kq2f712sonk9v6vitiemqs0flgt4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9GPWiNQcSAdxU3fD_Wd0zcyAVYo3FZrg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "111984323181-av69kq2f712sonk9v6vitiemqs0flgt4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:111984323181:android:0ec812df6f79364833ed64",
+        "android_client_info": {
+          "package_name": "com.melodify.melodifyapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "111984323181-av69kq2f712sonk9v6vitiemqs0flgt4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9GPWiNQcSAdxU3fD_Wd0zcyAVYo3FZrg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "111984323181-av69kq2f712sonk9v6vitiemqs0flgt4.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

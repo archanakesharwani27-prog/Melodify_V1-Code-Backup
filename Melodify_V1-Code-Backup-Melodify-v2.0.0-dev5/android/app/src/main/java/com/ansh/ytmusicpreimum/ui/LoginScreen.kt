@@ -45,7 +45,7 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
         }
         null
     }
-    val webClientId = "854004439119-vtfd5l5rfet0rviabr9uqe3d4rbgucj1.apps.googleusercontent.com"
+    val webClientId = "111984323181-av69kq2f712sonk9v6vitiemqs0flgt4.apps.googleusercontent.com"
     
     var showEmailDialog by remember { mutableStateOf(false) }
     var showPhoneDialog by remember { mutableStateOf(false) }

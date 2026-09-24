@@ -320,22 +320,22 @@ fun HomeHeader(
                         fontWeight = FontWeight.Bold,
                         letterSpacing = (-0.5).sp
                     ), 
-                    color = GeminiTextPrimary
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
             
             Surface(
                 onClick = { homeViewModel.refresh() },
-                color = GeminiCardBg,
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = CircleShape,
-                border = androidx.compose.foundation.BorderStroke(1.dp, GeminiBorder),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                 modifier = Modifier.size(46.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Default.Refresh, 
                         contentDescription = "Refresh", 
-                        tint = GeminiTextPrimary,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -346,7 +346,7 @@ fun HomeHeader(
         Text(
             text = "What would you like to listen to today?", 
             style = MaterialTheme.typography.bodyMedium, 
-            color = GeminiTextSecondary
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -424,7 +424,7 @@ fun CuratedHeroSection(
                 Text(
                     text = "Melodify Picks",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = GeminiTextPrimary
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
             Surface(

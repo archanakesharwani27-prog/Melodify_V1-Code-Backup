@@ -17,6 +17,8 @@ import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.outlined.Science
 import androidx.compose.ui.graphics.vector.ImageVector
 
 sealed class Screen(
