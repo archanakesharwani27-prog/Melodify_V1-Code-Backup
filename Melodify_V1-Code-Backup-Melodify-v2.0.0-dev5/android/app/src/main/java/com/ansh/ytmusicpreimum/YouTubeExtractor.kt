@@ -165,11 +165,18 @@ object YouTubeExtractor {
     fun cleanSongTitle(rawTitle: String): String {
         var title = rawTitle
 
-        // 1. Handle Colon split: "Akhiyaan Gulaab (Song): Shahid Kapoor, Kriti Sanon..."
+        // 1. Handle Colon split:
         if (title.contains(":")) {
             val left = title.substringBefore(":").trim()
+            val right = title.substringAfter(":").trim()
             val lowerLeft = left.lowercase()
-            if (left.isNotBlank() && !lowerLeft.startsWith("full") && !lowerLeft.startsWith("official") && left.length > 2) {
+            val isPrefixJunk = listOf("lyrical", "lyric", "video", "audio", "teaser", "trailer", "promo", "full", "official", "song", "hd", "4k")
+                .any { lowerLeft.contains(it) }
+            
+            if (isPrefixJunk && right.isNotBlank()) {
+                title = right
+            } else if (left.isNotBlank() && !lowerLeft.startsWith("full") && !lowerLeft.startsWith("official") && left.length > 2) {
+                // E.g. "Akhiyaan Gulaab (Song): Shahid Kapoor..." -> left is the song title
                 title = left
             }
         }
@@ -192,6 +199,10 @@ object YouTubeExtractor {
         title = title
             .replace(Regex("(?i)\\((?:official\\s*(?:music\\s*)?video|lyric(?:al)?(?:\\s*video)?|full\\s*(?:video\\s*)?song|video\\s*song|audio|song|remix|hd|4k|from\\s*\"[^\"]+\"|from\\s*'[^']+')\\)"), "")
             .replace(Regex("(?i)\\[(?:official\\s*(?:music\\s*)?video|lyric(?:al)?(?:\\s*video)?|full\\s*(?:video\\s*)?song|video\\s*song|audio|song|remix|hd|4k)\\]"), "")
+
+        // 5. Strip unbracketed trailing clutter like "Official Music Video", "Lyrics", "Song"
+        title = title
+            .replace(Regex("(?i)\\b(?:official\\s*(?:music\\s*)?video|lyric(?:al)?(?:\\s*video)?|full\\s*(?:video\\s*)?song|video\\s*song|lyrics?)\\b"), "")
             .replace(Regex("\\s+"), " ")
             .trim()
 
@@ -350,6 +361,26 @@ object YouTubeExtractor {
     fun prefetch(videoId: String, quality: String = "Medium", scope: CoroutineScope): Job {
         return scope.launch {
             getAudioUrl(videoId, quality)
+        }
+    }
+
+    suspend fun fetchTrackMetadata(videoId: String): TrackEntity? = withContext(Dispatchers.IO) {
+        try {
+            val service = ServiceList.YouTube
+            val url = "https://www.youtube.com/watch?v=$videoId"
+            val streamInfo = StreamInfo.getInfo(service, url)
+            val decodedName = decodeHtml(streamInfo.name)
+            val decodedUploader = decodeHtml(streamInfo.uploaderName)
+            val thumb = streamInfo.thumbnails.firstOrNull()?.url ?: "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
+            TrackEntity(
+                id = videoId,
+                title = cleanSongTitle(decodedName),
+                artist = cleanArtistName(decodedName, decodedUploader),
+                thumbnailUrl = thumb
+            )
+        } catch (e: Throwable) {
+            android.util.Log.e("YouTubeExtractor", "Failed to fetch metadata for $videoId", e)
+            null
         }
     }
 }

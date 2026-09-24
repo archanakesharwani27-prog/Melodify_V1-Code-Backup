@@ -83,22 +83,56 @@ class MelodifyDownloadManager(private val context: Context) {
                     if (songId.isBlank()) continue
 
                     val existing = trackDao.getTrackById(songId)
-                    if (existing == null) {
+                    val needsMetadataRecovery = existing == null || 
+                        existing.title == songId || 
+                        existing.artist == "Downloaded Song" || 
+                        existing.title.isBlank() ||
+                        existing.title.equals("LYRICAL", ignoreCase = true)
+
+                    if (needsMetadataRecovery) {
                         var title = songId
                         var artist = "Downloaded Song"
+                        var thumb = "https://img.youtube.com/vi/$songId/hqdefault.jpg"
                         var duration = 0L
-                        try {
-                            val retriever = android.media.MediaMetadataRetriever()
-                            retriever.setDataSource(file.absolutePath)
-                            val metaTitle = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE)
-                            val metaArtist = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST)
-                            val metaDur = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
-                            if (!metaTitle.isNullOrBlank()) title = metaTitle
-                            if (!metaArtist.isNullOrBlank()) artist = metaArtist
-                            if (!metaDur.isNullOrBlank()) duration = metaDur.toLongOrNull() ?: 0L
-                            retriever.release()
-                        } catch (e: Throwable) {
-                            android.util.Log.w("MelodifyDownload", "Metadata retriever error for ${file.name}", e)
+
+                        // 1. Try reading companion .meta file first (instant offline recovery)
+                        val metaFile = File(downloadsDir, "$songId.meta")
+                        var recoveredFromMeta = false
+                        if (metaFile.exists()) {
+                            try {
+                                val props = java.util.Properties()
+                                metaFile.inputStream().use { props.load(it) }
+                                val pTitle = props.getProperty("title")
+                                val pArtist = props.getProperty("artist")
+                                val pThumb = props.getProperty("thumbnailUrl")
+                                val pDur = props.getProperty("duration")?.toLongOrNull() ?: 0L
+                                if (!pTitle.isNullOrBlank() && !pTitle.equals("LYRICAL", ignoreCase = true) && pTitle != songId) {
+                                    title = pTitle
+                                    artist = pArtist ?: "Various Artists"
+                                    if (!pThumb.isNullOrBlank()) thumb = pThumb
+                                    duration = pDur
+                                    recoveredFromMeta = true
+                                }
+                            } catch (t: Throwable) {
+                                android.util.Log.w("MelodifyDownload", "Failed to read .meta for $songId", t)
+                            }
+                        }
+
+                        // 2. Try MediaMetadataRetriever if .meta didn't work
+                        if (!recoveredFromMeta) {
+                            try {
+                                val retriever = android.media.MediaMetadataRetriever()
+                                retriever.setDataSource(file.absolutePath)
+                                val metaTitle = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE)
+                                val metaArtist = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                                val metaDur = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                                if (!metaTitle.isNullOrBlank()) title = metaTitle
+                                if (!metaArtist.isNullOrBlank()) artist = metaArtist
+                                if (!metaDur.isNullOrBlank()) duration = metaDur.toLongOrNull() ?: 0L
+                                retriever.release()
+                            } catch (e: Throwable) {
+                                android.util.Log.w("MelodifyDownload", "Metadata retriever error for ${file.name}", e)
+                            }
                         }
 
                         val recoveredTrack = TrackEntity(
@@ -106,13 +140,41 @@ class MelodifyDownloadManager(private val context: Context) {
                             title = title,
                             artist = artist,
                             album = "Downloaded",
+                            thumbnailUrl = thumb,
                             isDownloaded = true,
                             localFilePath = file.absolutePath,
                             addedDate = file.lastModified()
                         )
                         trackDao.insertTrack(recoveredTrack)
                         android.util.Log.i("MelodifyDownload", "Auto-recovered offline download: $songId ($title)")
-                    } else if (!existing.isDownloaded || existing.localFilePath != file.absolutePath) {
+
+                        // 3. If title is still just the video ID or invalid tag, fetch real title and artist in background from YouTube
+                        if (title == songId || artist == "Downloaded Song" || title.equals("LYRICAL", ignoreCase = true)) {
+                            scope.launch {
+                                val onlineInfo = YouTubeExtractor.fetchTrackMetadata(songId)
+                                if (onlineInfo != null) {
+                                    val fullyRecovered = recoveredTrack.copy(
+                                        title = onlineInfo.title,
+                                        artist = onlineInfo.artist,
+                                        thumbnailUrl = onlineInfo.thumbnailUrl
+                                    )
+                                    trackDao.insertTrack(fullyRecovered)
+
+                                    // Save companion .meta file for future offline boot
+                                    try {
+                                        val props = java.util.Properties()
+                                        props.setProperty("title", fullyRecovered.title)
+                                        props.setProperty("artist", fullyRecovered.artist)
+                                        props.setProperty("thumbnailUrl", fullyRecovered.thumbnailUrl)
+                                        metaFile.outputStream().use { props.store(it, "Melodify Track Metadata") }
+                                    } catch (t: Throwable) {
+                                        // Ignore
+                                    }
+                                    android.util.Log.i("MelodifyDownload", "Repaired song metadata: $songId -> ${fullyRecovered.title}")
+                                }
+                            }
+                        }
+                    } else if (existing != null && (!existing.isDownloaded || existing.localFilePath != file.absolutePath)) {
                         val updated = existing.copy(
                             isDownloaded = true,
                             localFilePath = file.absolutePath
@@ -272,6 +334,19 @@ class MelodifyDownloadManager(private val context: Context) {
                     if (isActive) {
                         val updatedTrack = track.copy(isDownloaded = true, localFilePath = file.absolutePath)
                         trackDao.insertTrack(updatedTrack)
+                        
+                        // Save companion .meta file right alongside the downloaded audio file
+                        try {
+                            val metaFile = File(folder, "${track.id}.meta")
+                            val props = java.util.Properties()
+                            props.setProperty("title", track.title)
+                            props.setProperty("artist", track.artist)
+                            props.setProperty("thumbnailUrl", track.thumbnailUrl)
+                            metaFile.outputStream().use { props.store(it, "Melodify Track Metadata") }
+                        } catch (t: Throwable) {
+                            android.util.Log.w("MelodifyDownload", "Failed to write companion meta", t)
+                        }
+
                         showDownloadCompleteNotification(track, totalMb, isVideo)
                         _downloadStates.update { it + (track.id to DownloadState(DownloadStatus.COMPLETED, 1f, totalMb, quality)) }
                     } else {

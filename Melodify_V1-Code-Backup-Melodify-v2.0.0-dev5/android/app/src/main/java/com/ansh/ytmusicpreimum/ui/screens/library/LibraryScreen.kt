@@ -190,7 +190,7 @@ fun LibraryScreen(
     val downloadedTracks by libraryViewModel.downloadedTracks.collectAsState()
     val playlists by libraryViewModel.playlists.collectAsState()
     val history by libraryViewModel.playbackHistory.collectAsState()
-    var selectedTab by remember { mutableStateOf("Playlists") }
+    var selectedTab by remember { mutableStateOf("Downloads") }
     val context = LocalContext.current
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
 
@@ -270,10 +270,10 @@ fun LibraryScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(end = 16.dp)
         ) {
+             item(key = "tab_downloads") { LibraryChip("Downloads", count = (downloadedTracks.size + downloadStates.size + queuedTracks.size), isSelected = selectedTab == "Downloads", onClick = { selectedTab = "Downloads" }) }
+             item(key = "tab_liked") { LibraryChip("Liked", count = likedTracks.size, isSelected = selectedTab == "Liked", onClick = { selectedTab = "Liked" }) }
              item(key = "tab_playlists") { LibraryChip("Playlists", count = playlists.size, isSelected = selectedTab == "Playlists", onClick = { selectedTab = "Playlists" }) }
              item(key = "tab_history") { LibraryChip("History", count = history.size, isSelected = selectedTab == "History", onClick = { selectedTab = "History" }) }
-             item(key = "tab_liked") { LibraryChip("Liked", count = likedTracks.size, isSelected = selectedTab == "Liked", onClick = { selectedTab = "Liked" }) }
-             item(key = "tab_downloads") { LibraryChip("Downloads", count = (downloadedTracks.size + downloadStates.size + queuedTracks.size), isSelected = selectedTab == "Downloads", onClick = { selectedTab = "Downloads" }) }
              item(key = "tab_local") { LibraryChip("Local", count = localTracks.size, isSelected = selectedTab == "Local", onClick = { selectedTab = "Local" }) }
         }
 
