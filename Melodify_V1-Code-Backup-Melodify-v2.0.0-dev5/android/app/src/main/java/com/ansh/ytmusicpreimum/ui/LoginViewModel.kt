@@ -284,6 +284,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
                     android.util.Log.e("LoginViewModel", "onVerificationFailed: ${e.message}", e)
                     _isLoading.value = false
                     val errorMsg = when {
+                        e.message?.contains("BILLING_NOT_ENABLED") == true ->
+                            "Real SMS requires Firebase Blaze plan. Please add this number under 'Phone numbers for testing' in Firebase Console (Free)."
                         e.message?.contains("17006") == true || e.message?.contains("SMS unable to be sent until this region enabled") == true ->
                             "SMS Region Blocked: Please enable India (+91) in Firebase SMS Region Policy or use a Test Phone Number."
                         e.message?.contains("17010") == true || e.message?.contains("Too many requests") == true ->

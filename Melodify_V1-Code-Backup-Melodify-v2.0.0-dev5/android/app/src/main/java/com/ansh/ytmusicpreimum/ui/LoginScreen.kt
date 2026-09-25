@@ -18,7 +18,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -28,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Phone
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ansh.ytmusicpreimum.ui.theme.*
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -49,11 +47,6 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
     val webClientId = "111984323181-av69kq2f712sonk9v6vitiemqs0flgt4.apps.googleusercontent.com"
     
     var showEmailDialog by remember { mutableStateOf(false) }
-    var showPhoneDialog by remember { mutableStateOf(false) }
-    var showOtpDialog by remember { mutableStateOf(false) }
-    val isLoading by loginViewModel.isLoading.collectAsState()
-    var phoneErrorMessage by remember { mutableStateOf<String?>(null) }
-    var otpErrorMessage by remember { mutableStateOf<String?>(null) }
 
     // Google Sign-In options
     val gso = remember {
@@ -220,18 +213,6 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
                 onClick = { showEmailDialog = true }
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            LoginButton(
-                text = "Continue with Phone",
-                icon = Icons.Default.Phone,
-                containerColor = CyberSurface,
-                contentColor = Color.White,
-                onClick = { 
-                    showPhoneDialog = true
-                }
-            )
-
             Spacer(modifier = Modifier.height(24.dp))
 
             TextButton(onClick = { 
@@ -256,56 +237,6 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
             onSignUp = { email, pass, name -> 
             loginViewModel.                                     signUpWithEmail(email, pass, name)
                 showEmailDialog = false
-            }
-        )
-    }
-
-    if (showPhoneDialog) {
-        PhoneLoginDialog(
-            isLoading = isLoading,
-            errorMessage = phoneErrorMessage,
-            onDismiss = { 
-                showPhoneDialog = false 
-                phoneErrorMessage = null
-            },
-            onSendOtp = { phone -> 
-                phoneErrorMessage = null
-                if (activity != null) {
-                    loginViewModel.sendOtp(
-                        phoneNumber = phone,
-                        activity = activity,
-                        onOtpSent = {
-                            showPhoneDialog = false
-                            showOtpDialog = true
-                            phoneErrorMessage = null
-                        },
-                        onError = { err ->
-                            phoneErrorMessage = err
-                        }
-                    )
-                } else {
-                    Toast.makeText(context, "Activity context unavailable", Toast.LENGTH_SHORT).show()
-                }
-            }
-        )
-    }
-
-    if (showOtpDialog) {
-        OtpDialog(
-            isLoading = isLoading,
-            errorMessage = otpErrorMessage,
-            onDismiss = { 
-                showOtpDialog = false 
-                otpErrorMessage = null
-            },
-            onVerify = { otp ->
-                otpErrorMessage = null
-                loginViewModel.verifyOtp(
-                    otp = otp,
-                    onError = { err ->
-                        otpErrorMessage = err
-                    }
-                )
             }
         )
     }
@@ -378,159 +309,6 @@ fun AuthTextField(
             focusedIndicatorColor = NeonRed,
             unfocusedIndicatorColor = GrayText.copy(alpha = 0.5f)
         )
-    )
-}
-
-@Composable
-fun PhoneLoginDialog(
-    isLoading: Boolean,
-    errorMessage: String?,
-    onDismiss: () -> Unit,
-    onSendOtp: (String) -> Unit
-) {
-    var phone by remember { mutableStateOf("") }
-    var countryCode by remember { mutableStateOf("+91") }
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = CyberSurface,
-        title = { Text("Phone Login", color = Color.White) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Enter your mobile number", color = GrayText, fontSize = 14.sp)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Country Code Picker (Simplified)
-                    Surface(
-                        modifier = Modifier.height(56.dp).width(60.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color.White.copy(alpha = 0.1f)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(countryCode, color = Color.White, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    TextField(
-                        value = phone,
-                        onValueChange = { if (it.length <= 10) phone = it.filter { char -> char.isDigit() } },
-                        placeholder = { Text("00000 00000", color = GrayText) },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        singleLine = true,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.White.copy(alpha = 0.1f),
-                            unfocusedContainerColor = Color.White.copy(alpha = 0.1f),
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        )
-                    )
-                }
-
-                if (!errorMessage.isNullOrEmpty()) {
-                    Text(
-                        text = errorMessage,
-                        color = Color(0xFFFF5252),
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (phone.length == 10 && !isLoading) {
-                        keyboardController?.hide()
-                        onSendOtp("$countryCode$phone")
-                    }
-                },
-                enabled = phone.length == 10 && !isLoading
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        color = Color.White,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("Send OTP")
-                }
-            }
-        }
-    )
-}
-
-@Composable
-fun OtpDialog(
-    isLoading: Boolean,
-    errorMessage: String?,
-    onDismiss: () -> Unit,
-    onVerify: (String) -> Unit
-) {
-    var otp by remember { mutableStateOf("") }
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = CyberSurface,
-        title = { Text("Verify OTP", color = Color.White) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Enter the 6-digit code sent to your phone", color = GrayText, fontSize = 14.sp)
-                TextField(
-                    value = otp,
-                    onValueChange = { if (it.length <= 6) otp = it.filter { char -> char.isDigit() } },
-                    placeholder = { Text("000000", color = GrayText) },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.White.copy(alpha = 0.1f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.1f),
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedIndicatorColor = NeonRed
-                    )
-                )
-
-                if (!errorMessage.isNullOrEmpty()) {
-                    Text(
-                        text = errorMessage,
-                        color = Color(0xFFFF5252),
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    if (otp.length == 6 && !isLoading) {
-                        keyboardController?.hide()
-                        onVerify(otp)
-                    }
-                },
-                enabled = otp.length == 6 && !isLoading,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        color = Color.White,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("Verify & Login")
-                }
-            }
-        }
     )
 }
 
