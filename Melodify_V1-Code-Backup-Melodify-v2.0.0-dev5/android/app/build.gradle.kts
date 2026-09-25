@@ -36,10 +36,10 @@ android {
             enableV2Signing = true
         }
         create("release") {
-            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+            storeFile = file("${project.rootDir}/melodify-release.jks")
+            storePassword = "melodify@2026"
+            keyAlias = "melodify"
+            keyPassword = "melodify@2026"
             enableV1Signing = true
             enableV2Signing = true
         }
