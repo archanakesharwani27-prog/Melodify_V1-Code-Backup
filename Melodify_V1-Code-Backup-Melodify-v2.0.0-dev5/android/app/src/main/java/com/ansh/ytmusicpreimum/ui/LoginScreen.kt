@@ -219,12 +219,12 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
             Spacer(modifier = Modifier.height(16.dp))
 
             LoginButton(
-                text = "Continue with Phone (Coming Soon)",
+                text = "Continue with Phone",
                 icon = Icons.Default.Phone,
-                containerColor = CyberSurface.copy(alpha = 0.5f),
-                contentColor = Color.Gray,
+                containerColor = CyberSurface,
+                contentColor = Color.White,
                 onClick = { 
-                    Toast.makeText(context, "Phone login is currently locked.", Toast.LENGTH_SHORT).show()
+                    showPhoneDialog = true
                 }
             )
 
