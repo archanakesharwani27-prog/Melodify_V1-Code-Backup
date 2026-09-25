@@ -243,12 +243,17 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private var verificationId: String? = null
     private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
 
-    fun sendOtp(phoneNumber: String, activity: Activity, onOtpSent: () -> Unit) {
+    fun sendOtp(phoneNumber: String, activity: Activity, onOtpSent: () -> Unit, onError: (String) -> Unit = {}) {
+        android.util.Log.i("LoginViewModel", "sendOtp invoked for $phoneNumber with activity: $activity")
         _isLoading.value = true
         val firebaseAuth = auth
         if (firebaseAuth == null) {
             _isLoading.value = false
-            Toast.makeText(getApplication(), "Authentication service unavailable", Toast.LENGTH_SHORT).show()
+            val msg = "Authentication service unavailable"
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
+                onError(msg)
+            }
             return
         }
 
@@ -258,29 +263,50 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             .setActivity(activity)
             .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
                 override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                    android.util.Log.i("LoginViewModel", "onVerificationCompleted instant sign-in")
                     _isLoading.value = false
                     firebaseAuth.signInWithCredential(credential).addOnCompleteListener { task ->
-                        if (task.isSuccessful) {
-                            val user = firebaseAuth.currentUser
-                            val phone = user?.phoneNumber ?: phoneNumber
-                            onLoginSuccess(phone, phone, null)
-                        } else {
-                            Toast.makeText(getApplication(), "Instant verification failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                            if (task.isSuccessful) {
+                                val user = firebaseAuth.currentUser
+                                val phone = user?.phoneNumber ?: phoneNumber
+                                onLoginSuccess(phone, phone, null)
+                            } else {
+                                val msg = "Instant verification failed: ${task.exception?.message}"
+                                Toast.makeText(getApplication(), msg, Toast.LENGTH_LONG).show()
+                                onError(msg)
+                            }
                         }
                     }
                 }
 
                 override fun onVerificationFailed(e: com.google.firebase.FirebaseException) {
+                    android.util.Log.e("LoginViewModel", "onVerificationFailed: ${e.message}", e)
                     _isLoading.value = false
-                    Toast.makeText(getApplication(), "OTP failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                    val errorMsg = when {
+                        e.message?.contains("17006") == true || e.message?.contains("SMS unable to be sent until this region enabled") == true ->
+                            "SMS Region Blocked: Please enable India (+91) in Firebase SMS Region Policy or use a Test Phone Number."
+                        e.message?.contains("17010") == true || e.message?.contains("Too many requests") == true ->
+                            "Too many requests. Please try again later or use a Test Number."
+                        e.message?.contains("Play Integrity") == true || e.message?.contains("app identifier") == true ->
+                            "Device verification failed. Ensure SHA-1/SHA-256 is registered in Firebase Console."
+                        else -> e.localizedMessage ?: (e.message ?: "OTP verification failed")
+                    }
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        Toast.makeText(getApplication(), errorMsg, Toast.LENGTH_LONG).show()
+                        onError(errorMsg)
+                    }
                 }
 
                 override fun onCodeSent(verId: String, token: PhoneAuthProvider.ForceResendingToken) {
+                    android.util.Log.i("LoginViewModel", "onCodeSent: verificationId=$verId")
                     _isLoading.value = false
                     verificationId = verId
                     resendToken = token
-                    Toast.makeText(getApplication(), "OTP sent to $phoneNumber", Toast.LENGTH_SHORT).show()
-                    onOtpSent()
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        Toast.makeText(getApplication(), "OTP sent to $phoneNumber", Toast.LENGTH_SHORT).show()
+                        onOtpSent()
+                    }
                 }
             })
             .build()
@@ -288,29 +314,42 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         PhoneAuthProvider.verifyPhoneNumber(options)
     }
 
-    fun verifyOtp(otp: String) {
+    fun verifyOtp(otp: String, onError: (String) -> Unit = {}) {
+        android.util.Log.i("LoginViewModel", "verifyOtp invoked with code: $otp")
         val verId = verificationId
         if (verId == null) {
-            Toast.makeText(getApplication(), "Verification session expired. Please resend OTP.", Toast.LENGTH_SHORT).show()
+            val msg = "Verification session expired. Please resend OTP."
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
+                onError(msg)
+            }
             return
         }
         _isLoading.value = true
         val firebaseAuth = auth
         if (firebaseAuth == null) {
             _isLoading.value = false
-            Toast.makeText(getApplication(), "Authentication service unavailable", Toast.LENGTH_SHORT).show()
+            val msg = "Authentication service unavailable"
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                Toast.makeText(getApplication(), msg, Toast.LENGTH_SHORT).show()
+                onError(msg)
+            }
             return
         }
 
         val credential = PhoneAuthProvider.getCredential(verId, otp)
         firebaseAuth.signInWithCredential(credential).addOnCompleteListener { task ->
             _isLoading.value = false
-            if (task.isSuccessful) {
-                val user = firebaseAuth.currentUser
-                val phone = user?.phoneNumber ?: "Phone User"
-                onLoginSuccess(phone, phone, null)
-            } else {
-                Toast.makeText(getApplication(), "Verification failed: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                if (task.isSuccessful) {
+                    val user = firebaseAuth.currentUser
+                    val phone = user?.phoneNumber ?: "Phone User"
+                    onLoginSuccess(phone, phone, null)
+                } else {
+                    val msg = task.exception?.message ?: "Invalid OTP entered"
+                    Toast.makeText(getApplication(), "Verification failed: $msg", Toast.LENGTH_LONG).show()
+                    onError(msg)
+                }
             }
         }
     }

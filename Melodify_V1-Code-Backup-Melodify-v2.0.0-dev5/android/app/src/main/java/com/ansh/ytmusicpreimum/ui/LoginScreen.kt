@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -50,6 +51,9 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
     var showEmailDialog by remember { mutableStateOf(false) }
     var showPhoneDialog by remember { mutableStateOf(false) }
     var showOtpDialog by remember { mutableStateOf(false) }
+    val isLoading by loginViewModel.isLoading.collectAsState()
+    var phoneErrorMessage by remember { mutableStateOf<String?>(null) }
+    var otpErrorMessage by remember { mutableStateOf<String?>(null) }
 
     // Google Sign-In options
     val gso = remember {
@@ -258,13 +262,27 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
 
     if (showPhoneDialog) {
         PhoneLoginDialog(
-            onDismiss = { showPhoneDialog = false },
+            isLoading = isLoading,
+            errorMessage = phoneErrorMessage,
+            onDismiss = { 
+                showPhoneDialog = false 
+                phoneErrorMessage = null
+            },
             onSendOtp = { phone -> 
+                phoneErrorMessage = null
                 if (activity != null) {
-                    loginViewModel.sendOtp(phone, activity) {
-                        showPhoneDialog = false
-                        showOtpDialog = true
-                    }
+                    loginViewModel.sendOtp(
+                        phoneNumber = phone,
+                        activity = activity,
+                        onOtpSent = {
+                            showPhoneDialog = false
+                            showOtpDialog = true
+                            phoneErrorMessage = null
+                        },
+                        onError = { err ->
+                            phoneErrorMessage = err
+                        }
+                    )
                 } else {
                     Toast.makeText(context, "Activity context unavailable", Toast.LENGTH_SHORT).show()
                 }
@@ -274,10 +292,20 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
 
     if (showOtpDialog) {
         OtpDialog(
-            onDismiss = { showOtpDialog = false },
+            isLoading = isLoading,
+            errorMessage = otpErrorMessage,
+            onDismiss = { 
+                showOtpDialog = false 
+                otpErrorMessage = null
+            },
             onVerify = { otp ->
-                loginViewModel.verifyOtp(otp)
-                showOtpDialog = false
+                otpErrorMessage = null
+                loginViewModel.verifyOtp(
+                    otp = otp,
+                    onError = { err ->
+                        otpErrorMessage = err
+                    }
+                )
             }
         )
     }
@@ -354,9 +382,15 @@ fun AuthTextField(
 }
 
 @Composable
-fun PhoneLoginDialog(onDismiss: () -> Unit, onSendOtp: (String) -> Unit) {
+fun PhoneLoginDialog(
+    isLoading: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onSendOtp: (String) -> Unit
+) {
     var phone by remember { mutableStateOf("") }
     var countryCode by remember { mutableStateOf("+91") }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -395,26 +429,52 @@ fun PhoneLoginDialog(onDismiss: () -> Unit, onSendOtp: (String) -> Unit) {
                         )
                     )
                 }
+
+                if (!errorMessage.isNullOrEmpty()) {
+                    Text(
+                        text = errorMessage,
+                        color = Color(0xFFFF5252),
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (phone.length == 10) {
+                    if (phone.length == 10 && !isLoading) {
+                        keyboardController?.hide()
                         onSendOtp("$countryCode$phone")
                     }
                 },
-                enabled = phone.length == 10
+                enabled = phone.length == 10 && !isLoading
             ) {
-                Text("Send OTP")
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Send OTP")
+                }
             }
         }
     )
 }
 
 @Composable
-fun OtpDialog(onDismiss: () -> Unit, onVerify: (String) -> Unit) {
+fun OtpDialog(
+    isLoading: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onVerify: (String) -> Unit
+) {
     var otp by remember { mutableStateOf("") }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CyberSurface,
@@ -437,15 +497,38 @@ fun OtpDialog(onDismiss: () -> Unit, onVerify: (String) -> Unit) {
                         focusedIndicatorColor = NeonRed
                     )
                 )
+
+                if (!errorMessage.isNullOrEmpty()) {
+                    Text(
+                        text = errorMessage,
+                        color = Color(0xFFFF5252),
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         },
         confirmButton = {
             Button(
-                onClick = { if (otp.length == 6) onVerify(otp) },
-                enabled = otp.length == 6,
+                onClick = {
+                    if (otp.length == 6 && !isLoading) {
+                        keyboardController?.hide()
+                        onVerify(otp)
+                    }
+                },
+                enabled = otp.length == 6 && !isLoading,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Verify & Login")
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Verify & Login")
+                }
             }
         }
     )
