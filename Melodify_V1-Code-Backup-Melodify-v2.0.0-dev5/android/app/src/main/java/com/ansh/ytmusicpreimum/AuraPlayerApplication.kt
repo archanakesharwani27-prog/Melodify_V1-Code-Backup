@@ -2,9 +2,6 @@ package com.ansh.ytmusicpreimum
 
 import android.app.Application
 import com.google.firebase.FirebaseApp
-import com.google.firebase.appcheck.FirebaseAppCheck
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
-import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import org.schabi.newpipe.extractor.NewPipe
 import com.ansh.ytmusicpreimum.data.AppDatabase
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -31,7 +28,11 @@ class MelodifyApplication : Application() {
                     val crashFile = java.io.File(filesDir, "last_crash.txt")
                     crashFile.writeText("Thread: ${thread.name}\nTime: ${java.util.Date()}\nError: ${android.util.Log.getStackTraceString(throwable)}")
                 } catch (ignored: Throwable) {}
-                defaultHandler?.uncaughtException(thread, throwable)
+                
+                // Only delegate to defaultHandler if on main UI thread to prevent spurious background crashes from killing the app
+                if (thread.name == "main" || android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                    defaultHandler?.uncaughtException(thread, throwable)
+                }
             }
         } catch (t: Throwable) {
             android.util.Log.e("MelodifyApplication", "Failed to install crash handler", t)
@@ -42,22 +43,6 @@ class MelodifyApplication : Application() {
             FirebaseApp.initializeApp(this)
         } catch (t: Throwable) {
             android.util.Log.e("MelodifyApplication", "FirebaseApp.initializeApp failed", t)
-        }
-
-        // 2. Initialize App Check with fallback and protect with try-catch
-        try {
-            val firebaseAppCheck = FirebaseAppCheck.getInstance()
-            if (BuildConfig.DEBUG) {
-                firebaseAppCheck.installAppCheckProviderFactory(
-                    DebugAppCheckProviderFactory.getInstance()
-                )
-            } else {
-                firebaseAppCheck.installAppCheckProviderFactory(
-                    PlayIntegrityAppCheckProviderFactory.getInstance()
-                )
-            }
-        } catch (t: Throwable) {
-            android.util.Log.w("MelodifyApplication", "FirebaseAppCheck init skipped or failed", t)
         }
 
         // 3. Initialize NewPipe downloader safely

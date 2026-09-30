@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,16 +50,34 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
     
     var showEmailDialog by remember { mutableStateOf(false) }
 
-    // Google Sign-In options
-    val gso = remember {
-        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .requestProfile()
-            .requestIdToken(webClientId)
-            .build()
+    // Check if Google Play Services is available (e.g. absent on Amazon Fire OS)
+    val isGooglePlayServicesAvailable = remember(context) {
+        try {
+            val availability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
+            availability.isGooglePlayServicesAvailable(context) == com.google.android.gms.common.ConnectionResult.SUCCESS
+        } catch (t: Throwable) {
+            false
+        }
     }
-    
-    val googleSignInClient = remember { GoogleSignIn.getClient(context, gso) }
+
+    // Google Sign-In options - safe on devices without Google Play Services
+    val googleSignInClient = remember(context, isGooglePlayServicesAvailable) {
+        if (isGooglePlayServicesAvailable) {
+            try {
+                val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                    .requestEmail()
+                    .requestProfile()
+                    .requestIdToken(webClientId)
+                    .build()
+                GoogleSignIn.getClient(context, gso)
+            } catch (t: Throwable) {
+                android.util.Log.w("LoginScreen", "GoogleSignIn.getClient init skipped or failed", t)
+                null
+            }
+        } else {
+            null
+        }
+    }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -151,6 +171,7 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -199,7 +220,17 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
                 containerColor = Color.White,
                 contentColor = Color.Black,
                 onClick = { 
-                    launcher.launch(googleSignInClient.signInIntent)
+                    val client = googleSignInClient
+                    if (client != null) {
+                        try {
+                            launcher.launch(client.signInIntent)
+                        } catch (t: Throwable) {
+                            android.util.Log.e("LoginScreen", "Failed to launch Google Sign-In", t)
+                            Toast.makeText(context, "Google Sign-In is unavailable. Please use Email or Guest mode.", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        Toast.makeText(context, "Google Play Services is not available on this device. Please use 'Continue with Email' or 'Continue as Guest'.", Toast.LENGTH_LONG).show()
+                    }
                 }
             )
 
