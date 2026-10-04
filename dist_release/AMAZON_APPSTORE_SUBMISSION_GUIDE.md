@@ -1,4 +1,4 @@
-# Amazon Appstore Submission Guide for Melodify v2.0.0
+# Amazon Appstore Submission Guide for Melodify v2.0.2
 
 This complete guide contains all required links, files, and copy-paste text for publishing **Melodify** on the **Amazon Appstore** (100% Free, Individual Developer Account, No D-U-N-S or Corporate Registration required).
 
@@ -18,9 +18,9 @@ All required files are pre-generated and ready in your workspace:
 
 ### Application Binary (Upload one of these)
 - **Signed Release APK (Recommended for Amazon):**  
-  `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\dist_release\Melodify-v2.0.0-release.apk`
+  `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\dist_release\Melodify-v2.0.2-release.apk`
 - **Signed Release AAB:**  
-  `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\dist_release\Melodify-v2.0.0-release.aab`
+  `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\dist_release\Melodify-v2.0.2-release.aab`
 
 ### Multimedia Assets (Icons & Screenshots)
 Folder location: `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\store_assets\amazon\`
