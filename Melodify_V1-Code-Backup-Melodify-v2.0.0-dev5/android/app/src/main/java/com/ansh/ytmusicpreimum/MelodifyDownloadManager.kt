@@ -417,7 +417,7 @@ class MelodifyDownloadManager(private val context: Context) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val typeStr = if (isVideo) "Video" else "Song"
         val notification = NotificationCompat.Builder(context, "download_channel")
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(R.drawable.ic_notification_music)
             .setContentTitle("Downloading $typeStr: ${track.title}")
             .setContentText("$progress%")
             .setProgress(100, progress, false)
@@ -432,7 +432,7 @@ class MelodifyDownloadManager(private val context: Context) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val typeStr = if (isVideo) "Video" else "Song"
         val notification = NotificationCompat.Builder(context, "download_channel")
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setSmallIcon(R.drawable.ic_notification_music)
             .setContentTitle("$typeStr Download Complete")
             .setContentText("'${track.title}' ($size) is now available offline.")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)

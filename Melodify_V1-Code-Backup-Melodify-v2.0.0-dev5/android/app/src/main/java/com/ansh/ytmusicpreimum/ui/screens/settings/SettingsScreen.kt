@@ -37,7 +37,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -513,7 +513,7 @@ fun SettingsScreen(
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
-                            error = painterResource(id = com.ansh.ytmusicpreimum.R.drawable.ic_launcher_foreground)
+                            error = rememberVectorPainter(Icons.Default.Person)
                         )
                         Box(
                             modifier = Modifier
@@ -647,7 +647,7 @@ fun EnhancedHeroProfileCard(
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
-                            error = painterResource(id = com.ansh.ytmusicpreimum.R.drawable.ic_launcher_foreground)
+                            error = rememberVectorPainter(Icons.Default.Person)
                         )
                     }
 
