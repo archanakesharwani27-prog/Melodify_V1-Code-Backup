@@ -513,7 +513,7 @@ fun SettingsScreen(
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
-                            error = painterResource(id = android.R.drawable.ic_menu_camera)
+                            error = painterResource(id = com.ansh.ytmusicpreimum.R.drawable.ic_launcher_foreground)
                         )
                         Box(
                             modifier = Modifier
@@ -647,7 +647,7 @@ fun EnhancedHeroProfileCard(
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop,
-                            error = painterResource(id = android.R.drawable.ic_menu_report_image)
+                            error = painterResource(id = com.ansh.ytmusicpreimum.R.drawable.ic_launcher_foreground)
                         )
                     }
 

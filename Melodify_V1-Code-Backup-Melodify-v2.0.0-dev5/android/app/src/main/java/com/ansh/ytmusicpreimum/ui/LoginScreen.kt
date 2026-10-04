@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ansh.ytmusicpreimum.ui.theme.*
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -82,8 +83,8 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
         try {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
             val account = task.getResult(ApiException::class.java)
             if (account != null) {
                 val displayName = account.displayName ?: account.givenName ?: "Google User"
@@ -141,6 +142,8 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
             } else if (e.statusCode != 12501) { // 12501 is user cancelled
                 Toast.makeText(context, "Sign-in failed (${e.statusCode}). You can also Continue as Guest.", Toast.LENGTH_SHORT).show()
             }
+        } catch (t: Throwable) {
+            android.util.Log.e("LoginScreen", "Unexpected error processing sign-in result", t)
         }
     }
 
@@ -185,7 +188,7 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        painter = painterResource(id = android.R.drawable.ic_media_play),
+                        imageVector = Icons.Default.PlayArrow,
                         contentDescription = null,
                         modifier = Modifier.size(50.dp),
                         tint = MaterialTheme.colorScheme.primary
