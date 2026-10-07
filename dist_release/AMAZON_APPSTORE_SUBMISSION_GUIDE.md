@@ -1,4 +1,4 @@
-# Amazon Appstore Submission Guide for Melodify v2.0.2
+# Amazon Appstore Submission Guide for Melodify v2.0.3
 
 This complete guide contains all required links, files, and copy-paste text for publishing **Melodify** on the **Amazon Appstore** (100% Free, Individual Developer Account, No D-U-N-S or Corporate Registration required).
 
@@ -18,9 +18,9 @@ All required files are pre-generated and ready in your workspace:
 
 ### Application Binary (Upload one of these)
 - **Signed Release APK (Recommended for Amazon):**  
-  `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\dist_release\Melodify-v2.0.2-release.apk`
+  `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\dist_release\Melodify-v2.0.3-release.apk`
 - **Signed Release AAB:**  
-  `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\dist_release\Melodify-v2.0.2-release.aab`
+  `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\dist_release\Melodify-v2.0.3-release.aab`
 
 ### Multimedia Assets (Icons & Screenshots)
 Folder location: `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\store_assets\amazon\`
@@ -44,24 +44,12 @@ Folder location: `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-
 
 ### Step 1: Open Amazon Developer Portal & Sign In
 1. Go to [https://developer.amazon.com](https://developer.amazon.com).
-2. Sign in with your Amazon account (or create a new Amazon account).
-3. If it asks you to complete the developer registration:
-   - Choose **Individual / Merchant**.
-   - Enter your name, developer display name (e.g. `Melodify` or `Ansh Kesharwani`), and email.
-   - Accept the Amazon Developer Services Agreement.
-
-### Step 2: Create New App Entry
-1. In the top navigation bar, click on **Apps & Services** (or **Appstore**).
-2. Click **Add new app** and select **Android**.
-3. Fill in the basic info:
-   - **App Title:** `Melodify - Music & Offline Player`
-   - **App SKU:** `com.melodify.music`
-   - **App Category:** `Music` -> `Audio Players & Recorders` (or `Streaming & Internet Radio`)
-   - Click **Save**.
+2. Sign in with your Amazon account.
+3. Open your existing app **Melodify - Music & Offline Player** and click **Add Upcoming Version** (or edit the pending version).
 
 ---
 
-### Step 3: App Details & Description (Copy-Paste Text)
+### Step 2: App Details & Description (Copy-Paste Text)
 
 #### **Short Description** (Max 1200 characters):
 ```
@@ -76,7 +64,7 @@ Key Features:
 - Seamless Streaming & Search: Explore millions of tracks, trending charts, and curated playlists instantly.
 - Offline Downloads: Save your favorite songs directly to your device with full metadata, high-resolution album art, and lightning-fast offline playback.
 - Dynamic Synchronized Lyrics: Sing along with real-time word-by-word synced lyrics and translated captions.
-- Immersive Audio Player: Enjoy background playback with persistent lock screen controls, seamless queue management, and repeat/shuffle modes.
+- Immersive Audio Player: Enjoy background playback with persistent notification controls, seamless queue management, and repeat/shuffle modes.
 - Personalized Aesthetics: Choose between deep OLED dark mode, vibrant dynamic themes, and customizable accent colors.
 - Private & Clean: No intrusive ads, zero tracking, and lightweight storage footprint.
 
@@ -87,7 +75,7 @@ Take your music listening experience to the next level with Melodify.
 - High-fidelity streaming and offline audio playback
 - Real-time synchronized lyrics support
 - Smart library with downloaded songs and liked tracks
-- Background playback and full lock screen controls
+- Background playback and convenient media controls
 - Beautiful dark and dynamic color themes
 
 #### **Keywords**:
@@ -102,32 +90,29 @@ https://github.com/archanakesharwani27-prog/Melodify_V1-Code-Backup/blob/master/
 
 ---
 
-### Step 4: Upload Multimedia (Images)
+### Step 3: Upload Multimedia (Images)
 1. **Large Icon:** Select `store_assets\amazon\icon_512x512.png`.
 2. **Small Icon:** Select `store_assets\amazon\icon_114x114.png`.
 3. **Screenshots:** Drag & drop all 4 screenshot files from `store_assets\amazon\`.
 
 ---
 
-### Step 5: Upload Application Binary
+### Step 4: Upload Application Binary
 1. Click **App Files** / **Upload binary**.
 2. Select:
-   `dist_release\Melodify-v2.0.0-release.apk`
+   `dist_release\Melodify-v2.0.3-release.apk`
 3. Device Support: Leave default (All compatible Android devices / phones / tablets).
 
 ---
 
-### Step 6: Content Rating & Availability
-1. **Content Rating:**
-   - Complete the short rating survey (Violence: No, Profanity: No, Gambling: No).
-   - Target Audience: `General / Everyone`.
-2. **Pricing & Availability:**
-   - App Price: **Free ($0.00)**.
-   - Availability: **All countries and regions**.
+### Step 5: Testing Instructions / Notes for Reviewers (CRUCIAL)
+In the **Testing Instructions** box, paste the following note:
+```
+The app works completely standalone and offline-capable on Fire OS. Testers can tap "Continue as Guest" on the welcome screen to instantly access and verify all streaming, playback, search, and library features without needing any credentials.
+```
 
 ---
 
-### Step 7: Review and Submit
+### Step 6: Review and Submit
 1. Check the overview tab to make sure all green checkmarks appear on the left sidebar tabs.
 2. Click **Submit App**.
-3. Amazon will test and review the app within 24 to 72 hours.

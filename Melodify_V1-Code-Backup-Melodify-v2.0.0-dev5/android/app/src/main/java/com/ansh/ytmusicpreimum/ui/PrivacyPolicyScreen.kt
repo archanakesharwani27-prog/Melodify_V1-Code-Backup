@@ -77,7 +77,7 @@ fun PrivacyPolicyScreen(onBack: () -> Unit) {
             PermissionRow("Internet Access", "Required to stream music, fetch album artwork, retrieve lyrics, and sync cloud playlists.")
             PermissionRow("Storage / Media Audio", "Required to access and play local audio files on your device.")
             PermissionRow("Haptic Feedback & Vibrate", "Provides tactile feedback for gesture controls and playback buttons.")
-            PermissionRow("Foreground Service & Media Playback", "Allows uninterrupted background playback and Lockscreen media controls.")
+            PermissionRow("Foreground Service & Media Playback", "Allows uninterrupted background playback and notification playback controls.")
 
             SectionTitle("4. Data Security & User Control")
             Text(

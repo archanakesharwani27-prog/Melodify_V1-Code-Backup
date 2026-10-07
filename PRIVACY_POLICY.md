@@ -30,7 +30,7 @@ Melodify acts as an advanced audio engine and media player. Online streaming dat
 ## 3. App Permissions Explained
 - **Internet Access (`android.permission.INTERNET`):** Required to stream music, fetch album artwork, retrieve lyrics, and sync cloud playlists.
 - **Storage / Media Audio (`android.permission.READ_MEDIA_AUDIO`):** Required to access and play local audio files on your device.
-- **Foreground Service (`android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK`):** Allows uninterrupted background playback and Lockscreen media controls.
+- **Foreground Service (`android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK`):** Allows uninterrupted background playback and notification playback controls.
 - **Notifications (`android.permission.POST_NOTIFICATIONS`):** Used to display playback controls in the status bar notification tray.
 - **Audio Effects (`android.permission.RECORD_AUDIO`, `android.permission.MODIFY_AUDIO_SETTINGS`):** Used strictly for client-side dynamic audio visualization and equalizer effects. No voice or ambient audio is recorded or transmitted.
 - **Haptic Feedback (`android.permission.VIBRATE`):** Provides tactile feedback for gesture controls and playback buttons.

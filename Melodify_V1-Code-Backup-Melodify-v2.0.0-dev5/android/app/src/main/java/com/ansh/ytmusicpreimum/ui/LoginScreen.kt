@@ -216,27 +216,24 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
 
             Spacer(modifier = Modifier.height(48.dp))
 
-            LoginButton(
-                text = "Continue with Google",
-                icon = null,
-                containerColor = Color.White,
-                contentColor = Color.Black,
-                onClick = { 
-                    val client = googleSignInClient
-                    if (client != null) {
+            if (isGooglePlayServicesAvailable && googleSignInClient != null) {
+                LoginButton(
+                    text = "Continue with Google",
+                    icon = null,
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                    onClick = { 
                         try {
-                            launcher.launch(client.signInIntent)
+                            launcher.launch(googleSignInClient.signInIntent)
                         } catch (t: Throwable) {
                             android.util.Log.e("LoginScreen", "Failed to launch Google Sign-In", t)
                             Toast.makeText(context, "Google Sign-In is unavailable. Please use Email or Guest mode.", Toast.LENGTH_SHORT).show()
                         }
-                    } else {
-                        Toast.makeText(context, "Google Play Services is not available on this device. Please use 'Continue with Email' or 'Continue as Guest'.", Toast.LENGTH_LONG).show()
                     }
-                }
-            )
+                )
 
-            Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             LoginButton(
                 text = "Continue with Email",

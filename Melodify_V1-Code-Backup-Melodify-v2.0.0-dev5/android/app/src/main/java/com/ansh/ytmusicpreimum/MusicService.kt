@@ -340,7 +340,6 @@ class MusicService : MediaSessionService() {
                 ).apply {
                     description = "Media playback controls and status"
                     setShowBadge(false)
-                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 }
                 notificationManager.createNotificationChannel(channel)
             }
