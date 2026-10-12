@@ -30,7 +30,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
-    private val _isLoggedIn = MutableStateFlow(sharedPrefs.getBoolean("is_logged_in", false))
+    private val _isLoggedIn = MutableStateFlow(sharedPrefs.getBoolean("is_logged_in", true))
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn
 
     // All users are PRO by default now
@@ -55,13 +55,17 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _subDate = MutableStateFlow(sharedPrefs.getLong("sub_date", 0L))
     
-    private val _userName = MutableStateFlow(sharedPrefs.getString("user_name", ""))
+    private val _userName = MutableStateFlow<String?>(
+        sharedPrefs.getString("user_name", null)?.takeIf { it.isNotBlank() } ?: "Guest User"
+    )
     val userName: StateFlow<String?> = _userName
 
-    private val _userEmail = MutableStateFlow(sharedPrefs.getString("user_email", ""))
+    private val _userEmail = MutableStateFlow<String?>(
+        sharedPrefs.getString("user_email", null)?.takeIf { it.isNotBlank() } ?: "guest@melodify.com"
+    )
     val userEmail: StateFlow<String?> = _userEmail
 
-    private val _userPhotoUrl = MutableStateFlow(sharedPrefs.getString("user_photo", ""))
+    private val _userPhotoUrl = MutableStateFlow<String?>(sharedPrefs.getString("user_photo", ""))
     val userPhotoUrl: StateFlow<String?> = _userPhotoUrl
 
     // 0: Wifi only, 1: All Networks, 2: Mobile Data Only
@@ -73,7 +77,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     val isLoading: StateFlow<Boolean> = _isLoading
 
     val isGuestUser: Boolean
-        get() = _userEmail.value == "guest@melodify.com" || _userName.value == "Guest User"
+        get() = _userEmail.value == "guest@melodify.com" || _userName.value == "Guest User" || _userEmail.value.isNullOrBlank()
 
     init {
         checkAndResetLimits()
@@ -123,8 +127,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun isBackgroundPlaybackAllowed(): Boolean {
-        // Requirement: Gmail (or any authenticated) login required for background playback
-        return _isLoggedIn.value && !isGuestUser
+        return true
     }
 
     fun canUse8D(): Boolean {
@@ -155,13 +158,15 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onLoginSuccess(name: String?, email: String?, photoUrl: String?) {
-        saveUserToPrefs(name, email, photoUrl)
+        val finalName = name ?: "Guest User"
+        val finalEmail = email ?: "guest@melodify.com"
+        saveUserToPrefs(finalName, finalEmail, photoUrl)
         _isLoggedIn.value = true
-        _userName.value = name
-        _userEmail.value = email
+        _userName.value = finalName
+        _userEmail.value = finalEmail
         _userPhotoUrl.value = photoUrl
-        if (!email.isNullOrBlank() && email != "guest@melodify.com") {
-            com.ansh.ytmusicpreimum.data.TrackRepository.currentSyncUserId = email.replace(".", "_")
+        if (finalEmail.isNotBlank() && finalEmail != "guest@melodify.com") {
+            com.ansh.ytmusicpreimum.data.TrackRepository.currentSyncUserId = finalEmail.replace(".", "_")
         }
     }
 
@@ -194,11 +199,11 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             
             sharedPrefs.edit().clear().apply()
             
-            _isLoggedIn.value = false
+            _isLoggedIn.value = true
             _userTier.value = 2 // Keep PRO even on logout
             _subMonths.value = 0
-            _userName.value = ""
-            _userEmail.value = ""
+            _userName.value = "Guest User"
+            _userEmail.value = "guest@melodify.com"
             _userPhotoUrl.value = ""
         }
     }

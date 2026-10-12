@@ -35,8 +35,14 @@ import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 
+import androidx.compose.material.icons.filled.ArrowBack
+
 @Composable
-fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (String?, String?, String?) -> Unit) {
+fun LoginScreen(
+    loginViewModel: LoginViewModel = viewModel(), 
+    onLoginSuccess: (String?, String?, String?) -> Unit,
+    onBack: (() -> Unit)? = null
+) {
     val context = LocalContext.current
     val activity = remember(context) {
         var c = context
@@ -170,6 +176,17 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
                 .background(AccentPurple.copy(alpha = 0.15f), CircleShape)
         )
 
+        if (onBack != null) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = 40.dp, start = 16.dp)
+            ) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+            }
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -246,7 +263,11 @@ fun LoginScreen(loginViewModel: LoginViewModel = viewModel(), onLoginSuccess: (S
             Spacer(modifier = Modifier.height(24.dp))
 
             TextButton(onClick = { 
-                onLoginSuccess("Guest User", "guest@melodify.com", null)
+                if (onBack != null) {
+                    onBack()
+                } else {
+                    onLoginSuccess("Guest User", "guest@melodify.com", null)
+                }
             }) {
                 Text(
                     "Continue as Guest",

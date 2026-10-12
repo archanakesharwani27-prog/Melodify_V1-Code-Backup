@@ -64,8 +64,16 @@ class MusicService : MediaSessionService() {
         super.onCreate()
         instance = this
         
-        HapticBassManager.init(applicationContext)
-        AmbientSoundscapeManager.init(applicationContext)
+        try {
+            HapticBassManager.init(applicationContext)
+        } catch (t: Throwable) {
+            android.util.Log.e("MusicService", "HapticBassManager.init failed safely", t)
+        }
+        try {
+            AmbientSoundscapeManager.init(applicationContext)
+        } catch (t: Throwable) {
+            android.util.Log.e("MusicService", "AmbientSoundscapeManager.init failed safely", t)
+        }
 
         val sharedPrefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
         crossfadeDurationMs = sharedPrefs.getLong("crossfade_duration", 0L)
@@ -73,19 +81,28 @@ class MusicService : MediaSessionService() {
         // Force disable Audio Offload to ensure effects work on all devices (if any were used)
         val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(this)
 
-        exoPlayer = ExoPlayer.Builder(this, renderersFactory)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .setUsage(C.USAGE_MEDIA)
-                    .build(),
-                true // Handle Audio Focus automatically
-            )
-            .setHandleAudioBecomingNoisy(true)
-            .setWakeMode(C.WAKE_MODE_NETWORK)
-            .build()
+        exoPlayer = try {
+            ExoPlayer.Builder(this, renderersFactory)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                        .setUsage(C.USAGE_MEDIA)
+                        .build(),
+                    true // Handle Audio Focus automatically
+                )
+                .setHandleAudioBecomingNoisy(true)
+                .setWakeMode(C.WAKE_MODE_LOCAL)
+                .build()
+        } catch (t: Throwable) {
+            android.util.Log.w("MusicService", "Fallback ExoPlayer builder without custom wake/noisy", t)
+            ExoPlayer.Builder(this).build()
+        }
 
-        initAudioEffects(exoPlayer.audioSessionId)
+        try {
+            initAudioEffects(exoPlayer.audioSessionId)
+        } catch (t: Throwable) {
+            android.util.Log.e("MusicService", "initAudioEffects failed safely", t)
+        }
 
         exoPlayer.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
@@ -356,16 +373,20 @@ class MusicService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        mediaSession = MediaSession.Builder(this, forwardingPlayer)
-            .setCallback(callback)
-            .setSessionActivity(sessionActivityPendingIntent)
-            .build()
-
-        setMediaNotificationProvider(
-            DefaultMediaNotificationProvider.Builder(this)
-                .setChannelId(channelId)
+        try {
+            mediaSession = MediaSession.Builder(this, forwardingPlayer)
+                .setCallback(callback)
+                .setSessionActivity(sessionActivityPendingIntent)
                 .build()
-        )
+
+            setMediaNotificationProvider(
+                DefaultMediaNotificationProvider.Builder(this)
+                    .setChannelId(channelId)
+                    .build()
+            )
+        } catch (t: Throwable) {
+            android.util.Log.e("MusicService", "MediaSession or notification provider init failed safely", t)
+        }
     }
 
     private fun savePlaybackState() {
@@ -482,13 +503,17 @@ class MusicService : MediaSessionService() {
                 }
                 wakeLock?.acquire(60 * 60 * 1000L) // 60 min safety timeout
 
-                if (wifiLock == null) {
-                    val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-                    wifiLock = wifiManager?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Melodify:PlaybackWifiLock")?.apply {
-                        setReferenceCounted(false)
+                try {
+                    if (wifiLock == null) {
+                        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+                        wifiLock = wifiManager?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Melodify:PlaybackWifiLock")?.apply {
+                            setReferenceCounted(false)
+                        }
                     }
+                    wifiLock?.acquire()
+                } catch (t: Throwable) {
+                    android.util.Log.w("MusicService", "WifiLock acquire failed or not permitted", t)
                 }
-                wifiLock?.acquire()
             } else {
                 wakeLock?.let { if (it.isHeld) it.release() }
                 wifiLock?.let { if (it.isHeld) it.release() }

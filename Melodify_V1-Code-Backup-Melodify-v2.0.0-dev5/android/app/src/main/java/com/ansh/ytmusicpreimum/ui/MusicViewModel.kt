@@ -482,10 +482,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
              android.util.Log.d("MusicViewModel", "initController: Future already exists")
              return
         }
-        android.util.Log.d("MusicViewModel", "Initializing MediaController...")
-        val sessionToken = SessionToken(context.applicationContext, ComponentName(context, MusicService::class.java))
-        controllerFuture = MediaController.Builder(context.applicationContext, sessionToken).buildAsync()
-        controllerFuture?.addListener({
+        try {
+            android.util.Log.d("MusicViewModel", "Initializing MediaController...")
+            val sessionToken = SessionToken(context.applicationContext, ComponentName(context, MusicService::class.java))
+            controllerFuture = MediaController.Builder(context.applicationContext, sessionToken).buildAsync()
+            controllerFuture?.addListener({
             try {
                 val controller = controllerFuture?.get()
                 if (controller != null) {
@@ -612,6 +613,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 android.util.Log.e("MusicViewModel", "Failed to get MediaController", e)
             }
         }, ContextCompat.getMainExecutor(context))
+        } catch (t: Throwable) {
+            android.util.Log.e("MusicViewModel", "Failed to initialize MediaController safely", t)
+        }
     }
 
     private fun startProgressUpdate() {

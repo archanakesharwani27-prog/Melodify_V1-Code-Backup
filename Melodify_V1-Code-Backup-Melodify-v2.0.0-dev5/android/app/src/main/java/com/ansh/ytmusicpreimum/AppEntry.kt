@@ -54,30 +54,25 @@ fun MelodifyApp() {
             val isLoggedIn by loginViewModel.isLoggedIn.collectAsState()
 
             MelodifyTheme(darkTheme = isDarkTheme) {
-                if (!isLoggedIn) {
-                    LoginScreen(
-                        loginViewModel = loginViewModel,
-                        onLoginSuccess = { name, email, photo ->
-                            loginViewModel.onLoginSuccess(name, email, photo)
-                        }
-                    )
-                } else {
-                    val musicViewModel: MusicViewModel = viewModel()
+                val musicViewModel: MusicViewModel = viewModel()
 
-                    LaunchedEffect(Unit) {
+                LaunchedEffect(Unit) {
+                    try {
                         musicViewModel.initController(context)
+                    } catch (t: Throwable) {
+                        android.util.Log.e("MelodifyApp", "Controller init failed safely", t)
                     }
-
-                    MainScreen(
-                        musicViewModel = musicViewModel,
-                        loginViewModel = loginViewModel,
-                        isDarkTheme = isDarkTheme,
-                        onThemeChange = {
-                            isDarkTheme = it
-                            sharedPrefs.edit().putBoolean(AppPreferences.DARK_THEME, it).apply()
-                        }
-                    )
                 }
+
+                MainScreen(
+                    musicViewModel = musicViewModel,
+                    loginViewModel = loginViewModel,
+                    isDarkTheme = isDarkTheme,
+                    onThemeChange = {
+                        isDarkTheme = it
+                        sharedPrefs.edit().putBoolean(AppPreferences.DARK_THEME, it).apply()
+                    }
+                )
             }
         }
     }

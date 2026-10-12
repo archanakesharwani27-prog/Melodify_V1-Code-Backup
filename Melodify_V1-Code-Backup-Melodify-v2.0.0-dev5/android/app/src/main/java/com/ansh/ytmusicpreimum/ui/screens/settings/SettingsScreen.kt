@@ -152,15 +152,19 @@ fun SettingsScreen(
             // --- 1. HERO PROFILE & CLOUD SYNC CARD ---
             EnhancedHeroProfileCard(
                 userName = userName ?: "Guest User",
-                userEmail = userEmail ?: "No Google Account Linked",
+                userEmail = if (loginViewModel.isGuestUser) "Guest Mode (Local Playback)" else (userEmail ?: ""),
                 userPhoto = userPhoto,
                 userTier = userTier,
+                isGuestUser = loginViewModel.isGuestUser,
+                onSignInClick = { navController.navigate("auth") },
                 isDarkTheme = isDarkTheme,
                 isSyncing = isSyncingCloud,
                 syncRotation = syncRotation,
                 onEditClick = { showEditProfileDialog = true },
                 onSyncClick = {
-                    if (!isSyncingCloud) {
+                    if (loginViewModel.isGuestUser) {
+                        navController.navigate("auth")
+                    } else if (!isSyncingCloud) {
                         isSyncingCloud = true
                         coroutineScope.launch {
                             try {
@@ -470,12 +474,18 @@ fun SettingsScreen(
                 HorizontalDivider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 16.dp))
 
                 EnhancedSettingsRow(
-                    title = "Switch Account / Sign Out",
-                    subtitle = "Manage connected Google Account",
-                    icon = Icons.Default.Logout,
-                    iconColor = Color(0xFFFF5252),
+                    title = if (loginViewModel.isGuestUser) "Sign In / Create Account" else "Switch Account / Sign Out",
+                    subtitle = if (loginViewModel.isGuestUser) "Sign in with Google or Email for Cloud Sync" else "Manage connected account",
+                    icon = if (loginViewModel.isGuestUser) Icons.Default.Login else Icons.Default.Logout,
+                    iconColor = if (loginViewModel.isGuestUser) Color(0xFF00E5FF) else Color(0xFFFF5252),
                     isDarkTheme = isDarkTheme,
-                    onClick = onLogout
+                    onClick = {
+                        if (loginViewModel.isGuestUser) {
+                            navController.navigate("auth")
+                        } else {
+                            onLogout()
+                        }
+                    }
                 )
             }
 
@@ -589,6 +599,8 @@ fun EnhancedHeroProfileCard(
     isDarkTheme: Boolean,
     isSyncing: Boolean,
     syncRotation: Float,
+    isGuestUser: Boolean = false,
+    onSignInClick: () -> Unit = {},
     onEditClick: () -> Unit,
     onSyncClick: () -> Unit
 ) {
@@ -713,14 +725,14 @@ fun EnhancedHeroProfileCard(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                Icons.Default.CloudSync,
+                                if (isGuestUser) Icons.Default.CloudQueue else Icons.Default.CloudSync,
                                 contentDescription = null,
                                 tint = Color(0xFF00E5FF),
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                "Cloud Sync (Liked & Playlists)",
+                                if (isGuestUser) "Sign in to backup & sync library" else "Cloud Sync (Liked & Playlists)",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (isDarkTheme) Color.White.copy(alpha = 0.9f) else Color.Black
@@ -728,24 +740,33 @@ fun EnhancedHeroProfileCard(
                         }
 
                         TextButton(
-                            onClick = onSyncClick,
+                            onClick = if (isGuestUser) onSignInClick else onSyncClick,
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Icon(
-                                Icons.Default.Sync,
-                                contentDescription = "Sync Now",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .rotate(syncRotation)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                if (isSyncing) "Syncing..." else "Sync Now",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            if (isGuestUser) {
+                                Text(
+                                    "Sign In",
+                                    color = Color(0xFF00E5FF),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            } else {
+                                Icon(
+                                    Icons.Default.Sync,
+                                    contentDescription = "Sync Now",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .rotate(syncRotation)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    if (isSyncing) "Syncing..." else "Sync Now",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
                 }

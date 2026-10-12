@@ -76,8 +76,12 @@ fun MainScreen(
     
     // Auto-sync when account changes
     LaunchedEffect(userEmail) {
-        if (userEmail?.isNotEmpty() == true) {
-            libraryViewModel.syncWithCloud()
+        if (userEmail?.isNotEmpty() == true && userEmail != "guest@melodify.com") {
+            try {
+                libraryViewModel.syncWithCloud()
+            } catch (t: Throwable) {
+                android.util.Log.w("MainScreen", "syncWithCloud error ignored", t)
+            }
         }
     }
     
@@ -89,9 +93,13 @@ fun MainScreen(
             contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
         ) { /* Notification permission result handled */ }
         LaunchedEffect(Unit) {
-            val permission = android.Manifest.permission.POST_NOTIFICATIONS
-            if (androidx.core.content.ContextCompat.checkSelfPermission(context, permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                permissionLauncher.launch(permission)
+            try {
+                val permission = android.Manifest.permission.POST_NOTIFICATIONS
+                if (androidx.core.content.ContextCompat.checkSelfPermission(context, permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    permissionLauncher.launch(permission)
+                }
+            } catch (t: Throwable) {
+                android.util.Log.w("MainScreen", "POST_NOTIFICATIONS permission request failed or not supported", t)
             }
         }
     }
@@ -480,6 +488,16 @@ fun MainScreen(
                         }
                         composable(Screen.About.route) {
                             AboutMelodifyScreen(onBack = { navController.popBackStack() })
+                        }
+                        composable("auth") {
+                            LoginScreen(
+                                loginViewModel = loginViewModel,
+                                onLoginSuccess = { name, email, photo ->
+                                    loginViewModel.onLoginSuccess(name, email, photo)
+                                    navController.popBackStack()
+                                },
+                                onBack = { navController.popBackStack() }
+                            )
                         }
                     }
                 }
