@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Base application theme. -->
-    <style name="Theme.Melodify" parent="Theme.AppCompat.Light.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/purple_500</item> -->
+    <style name="Theme.Melodify" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/melodify_dark_bg</item>
+        <item name="android:colorBackground">@color/melodify_dark_bg</item>
+        <item name="android:statusBarColor">@color/melodify_dark_bg</item>
+        <item name="android:navigationBarColor">@color/melodify_dark_bg</item>
     </style>
 </resources>

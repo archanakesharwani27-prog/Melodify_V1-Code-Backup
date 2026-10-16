@@ -71,28 +71,28 @@ fun SplashScreen(
             try { textAlpha.animateTo(1f, tween(800)) } catch (t: Throwable) {}
 
             if (showNameIntro && userName.isNotEmpty()) {
-                delay(1000)
+                delay(600)
                 // Fade out logo text, Fade in User Name
-                try { textAlpha.animateTo(0f, tween(500)) } catch (t: Throwable) {}
-                try { nameAlpha.animateTo(1f, tween(1000)) } catch (t: Throwable) {}
-                delay(1500)
+                try { textAlpha.animateTo(0f, tween(300)) } catch (t: Throwable) {}
+                try { nameAlpha.animateTo(1f, tween(500)) } catch (t: Throwable) {}
+                delay(800)
             } else {
-                delay(1500)
+                delay(800)
             }
 
             // Fade out Audio & Exit
             launch {
                 try {
-                    for (i in 20 downTo 0) {
-                        val v = i.toFloat() / 20
+                    for (i in 10 downTo 0) {
+                        val v = i.toFloat() / 10
                         try { mediaPlayer?.setVolume(v, v) } catch (t: Throwable) {}
-                        delay(40)
+                        delay(20)
                     }
                     try { mediaPlayer?.stop() } catch (t: Throwable) {}
                 } catch (t: Throwable) {}
             }
 
-            try { scale.animateTo(1.1f, tween(800)) } catch (t: Throwable) {}
+            try { scale.animateTo(1.1f, tween(400)) } catch (t: Throwable) {}
         } catch (t: Throwable) {
             android.util.Log.e("SplashScreen", "Animation error in splash screen", t)
         } finally {

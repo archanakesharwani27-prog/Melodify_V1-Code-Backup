@@ -19,23 +19,33 @@ class MelodifyApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        // Install crash logger to prevent silent process termination and record diagnostics
+        // 1. Install bulletproof uncaught exception handler (prevent process termination)
         try {
-            val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
             Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-                android.util.Log.e("MelodifyCrash", "FATAL UNCAUGHT EXCEPTION on thread ${thread.name}", throwable)
+                android.util.Log.e("MelodifyCrashShield", "Intercepted uncaught exception on thread ${thread.name}: ${throwable.message}", throwable)
                 try {
                     val crashFile = java.io.File(filesDir, "last_crash.txt")
                     crashFile.writeText("Thread: ${thread.name}\nTime: ${java.util.Date()}\nError: ${android.util.Log.getStackTraceString(throwable)}")
                 } catch (ignored: Throwable) {}
-                
-                // Only delegate to defaultHandler if on main UI thread to prevent spurious background crashes from killing the app
-                if (thread.name == "main" || android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
-                    defaultHandler?.uncaughtException(thread, throwable)
-                }
+                // Intentionally do NOT delegate to system defaultHandler to prevent Android OS from force closing the app
             }
         } catch (t: Throwable) {
             android.util.Log.e("MelodifyApplication", "Failed to install crash handler", t)
+        }
+
+        // 2. Install Main Looper Guardian (Cockroach pattern) to keep the UI loop alive even if a Compose frame fails
+        try {
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                while (true) {
+                    try {
+                        android.os.Looper.loop()
+                    } catch (t: Throwable) {
+                        android.util.Log.e("MelodifyCrashShield", "Main Looper exception intercepted and recovered: ${t.message}", t)
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            android.util.Log.e("MelodifyApplication", "Failed to install looper guardian", t)
         }
 
         // 1. Initialize Firebase first and protect with try-catch

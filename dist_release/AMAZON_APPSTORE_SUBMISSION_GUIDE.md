@@ -1,4 +1,4 @@
-# Amazon Appstore Submission Guide for Melodify v2.0.4
+# Amazon Appstore Submission Guide for Melodify v2.0.5
 
 This complete guide contains all required links, files, and copy-paste text for publishing **Melodify** on the **Amazon Appstore** (100% Free, Individual Developer Account, No D-U-N-S or Corporate Registration required).
 
@@ -18,9 +18,9 @@ All required files are pre-generated and ready in your workspace:
 
 ### Application Binary (Upload one of these)
 - **Signed Release APK (Recommended for Amazon):**  
-  `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\dist_release\Melodify-v2.0.4-release.apk`
+  `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\dist_release\Melodify-v2.0.5-release.apk`
 - **Signed Release AAB:**  
-  `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\dist_release\Melodify-v2.0.4-release.aab`
+  `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\dist_release\Melodify-v2.0.5-release.aab`
 
 ### Multimedia Assets (Icons & Screenshots)
 Folder location: `d:\Ansh Kesharwani\Documents\Melodify_V1-Code-Backup-Melodify-v2.0.0-dev5\store_assets\amazon\`
@@ -100,7 +100,7 @@ https://github.com/archanakesharwani27-prog/Melodify_V1-Code-Backup/blob/master/
 ### Step 4: Upload Application Binary
 1. Click **App Files** / **Upload binary**.
 2. Select:
-   `dist_release\Melodify-v2.0.4-release.apk`
+   `dist_release\Melodify-v2.0.5-release.apk`
 3. Device Support: Leave default (All compatible Android devices / phones / tablets).
 
 ---
@@ -108,7 +108,7 @@ https://github.com/archanakesharwani27-prog/Melodify_V1-Code-Backup/blob/master/
 ### Step 5: Testing Instructions / Notes for Reviewers (CRUCIAL)
 In the **Testing Instructions** box, paste the following note:
 ```
-The app opens directly to the Home screen in Guest Mode upon launch with zero login requirements. Testers can immediately browse, search, and play music, manage the library, and test background playback. An optional Sign In / Sign Up option is available in the Settings screen for cloud sync.
+The app opens directly to the Home screen in Guest Mode upon launch with zero login requirements. It is fully compatible with Fire OS tablets and all Android devices, including devices without telephony, vibration motors, or microphones. Testers can immediately browse, search, and play music, manage the library, and test background playback. An optional Sign In / Sign Up option is available in the Settings screen for cloud sync.
 ```
 
 ---
