@@ -80,7 +80,20 @@ object YouTubeExtractor {
     suspend fun search(query: String): List<TrackEntity> = withContext(Dispatchers.IO) {
         try {
             val service = ServiceList.YouTube
-            val searchInfo = org.schabi.newpipe.extractor.search.SearchInfo.getInfo(service, service.searchQHFactory.fromQuery(query))
+            val encodedQuery = try {
+                java.net.URLEncoder.encode(query, "UTF-8")
+            } catch (e: Exception) {
+                query
+            }
+            val searchUrl = "https://www.youtube.com/results?search_query=$encodedQuery"
+            val queryHandler = org.schabi.newpipe.extractor.linkhandler.SearchQueryHandler(
+                searchUrl,
+                searchUrl,
+                query,
+                listOf("all"),
+                ""
+            )
+            val searchInfo = org.schabi.newpipe.extractor.search.SearchInfo.getInfo(service, queryHandler)
             searchInfo.relatedItems
                 .filterIsInstance<StreamInfoItem>()
                 .map { item ->

@@ -66,7 +66,8 @@ object HapticBassManager {
     }
 
     fun processFft(fft: ByteArray) {
-        if (!_isEnabled.value || vibrator == null || !vibrator!!.hasVibrator()) return
+        val hasVib = try { vibrator?.hasVibrator() == true } catch (t: Throwable) { false }
+        if (!_isEnabled.value || !hasVib) return
         if (fft.size < 8) return
 
         val now = System.currentTimeMillis()
