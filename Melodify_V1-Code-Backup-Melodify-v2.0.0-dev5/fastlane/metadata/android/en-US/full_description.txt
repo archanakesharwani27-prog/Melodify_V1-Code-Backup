@@ -1,0 +1,12 @@
+Melodify is a modern, privacy-friendly music and offline player for Android, designed for seamless high-fidelity audio playback.
+
+Key Features:
+- Ad-free Music Streaming: Enjoy your favorite songs and discover trending tracks with zero commercial interruptions.
+- Offline Playback: Play your local audio library seamlessly anywhere, anytime without an internet connection.
+- Real-Time Synced Lyrics: Sing along with word-by-word, beautiful karaoke-style synchronized lyrics.
+- Smart Library: Save your favorite songs, create custom playlists, and access your listening history.
+- Background & Lock Screen Controls: Full notification and lock screen playback controls with rich album art.
+- Audio Engine & Haptic Bass: Fine-tune your listening experience with equalizer presets and tactile haptic feedback.
+- Clean & Elegant UI: AMOLED black theme with fluid micro-animations and zero clutter.
+
+Melodify is free, open source, and respects your privacy.
